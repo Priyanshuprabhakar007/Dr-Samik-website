@@ -19,6 +19,9 @@ import {
   AlertCircle,
   ExternalLink,
   ChevronRight,
+  BellRing,
+  Flag,
+  RefreshCw,
 } from 'lucide-react';
 import {
   getEnquiries,
@@ -30,6 +33,7 @@ import {
   AuditRecord,
 } from '../../lib/firestoreService';
 import { useAuth } from '../../context/AuthContext';
+import { isFollowUpDue, isFollowUpUpcoming, localDateKey } from '../../lib/enquiryFollowUp';
 
 export const AdminDashboardPage: React.FC = () => {
   const { user } = useAuth();
@@ -38,10 +42,12 @@ export const AdminDashboardPage: React.FC = () => {
   const [blogCount, setBlogCount] = useState(0);
   const [auditLogs, setAuditLogs] = useState<AuditRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function loadMetrics() {
+  async function loadMetrics() {
       setLoading(true);
+      setLoadError(null);
       try {
         const [enqData, treatData, blogData, logsData] = await Promise.all([
           getEnquiries(),
@@ -55,17 +61,31 @@ export const AdminDashboardPage: React.FC = () => {
         setAuditLogs(logsData);
       } catch (err) {
         console.error('Failed to load metrics:', err);
+        setLoadError('Dashboard metrics could not be loaded. Please check permissions and retry.');
       } finally {
         setLoading(false);
       }
-    }
-    loadMetrics();
+  }
+
+  useEffect(() => {
+    void loadMetrics();
   }, []);
 
   const totalEnquiries = enquiries.length;
   const pendingEnquiries = enquiries.filter((e) => e.status === 'new').length;
   const scheduledCount = enquiries.filter((e) => e.status === 'scheduled').length;
   const contactedCount = enquiries.filter((e) => e.status === 'contacted').length;
+  const closedCount = enquiries.filter((e) => e.status === 'closed').length;
+  const today = localDateKey();
+  const dueEnquiries = enquiries
+    .filter(enquiry => isFollowUpDue(enquiry, today))
+    .sort((a, b) => {
+      const byDate = (a.followUpDate || '').localeCompare(b.followUpDate || '');
+      if (byDate !== 0) return byDate;
+      return (b.priority === 'high' ? 1 : 0) - (a.priority === 'high' ? 1 : 0);
+    });
+  const upcomingCount = enquiries.filter(enquiry => isFollowUpUpcoming(enquiry, today)).length;
+  const highPriorityCount = enquiries.filter(enquiry => enquiry.priority === 'high' && (enquiry.status === 'new' || enquiry.status === 'contacted')).length;
 
   const handleQuickStatusChange = async (id: string, status: EnquiryRecord['status']) => {
     try {
@@ -75,6 +95,7 @@ export const AdminDashboardPage: React.FC = () => {
       );
     } catch (err) {
       console.error('Status update error:', err);
+      setActionError('Could not update enquiry status. Please retry.');
     }
   };
 
@@ -113,6 +134,13 @@ export const AdminDashboardPage: React.FC = () => {
         </div>
       </div>
 
+      {(loadError || actionError) && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 p-3 bg-rose-950/30 border border-rose-500/30 text-xs text-rose-200">
+          <span>{loadError || actionError}</span>
+          {loadError && <button type="button" onClick={() => void loadMetrics()} className="flex items-center gap-2 underline"><RefreshCw className="w-3.5 h-3.5" /> Retry</button>}
+        </div>
+      )}
+
       {/* Real Statistics Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Metric 1: Pending Inquiries */}
@@ -128,7 +156,7 @@ export const AdminDashboardPage: React.FC = () => {
             <span className="text-[11px] text-amber-400 font-medium">Awaiting Contact</span>
           </div>
           <p className="text-[11px] text-[#7C766F] mt-2">
-            Total lifetime requests: {totalEnquiries}
+            Recent enquiries loaded: {totalEnquiries} (maximum 100)
           </p>
           <div className="absolute top-0 right-0 w-12 h-12 bg-[#C9A47F]/5 rounded-bl-full pointer-events-none" />
         </div>
@@ -143,7 +171,7 @@ export const AdminDashboardPage: React.FC = () => {
             <span className="text-3xl font-serif text-[#F6F0E9] font-light">
               {loading ? '-' : scheduledCount}
             </span>
-            <span className="text-[11px] text-emerald-400 font-medium">Confirmed OPD/Tele</span>
+            <span className="text-[11px] text-emerald-400 font-medium">Staff-marked scheduled</span>
           </div>
           <p className="text-[11px] text-[#7C766F] mt-2">
             In discussion: {contactedCount}
@@ -184,6 +212,75 @@ export const AdminDashboardPage: React.FC = () => {
           </p>
         </div>
       </div>
+
+      {/* Action Center: work priorities and due follow-up queue */}
+      <section className="bg-[#181514] border border-[#C9A47F]/20 p-5 sm:p-6 space-y-5" aria-labelledby="action-center-title">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <span className="text-[10px] uppercase tracking-[0.23em] text-[#C9A47F]">OPERATIONS</span>
+            <h2 id="action-center-title" className="font-serif text-xl sm:text-2xl text-[#F6F0E9] mt-1">Today's Follow-up Desk</h2>
+            <p className="text-[11px] text-[#AFA89F] mt-1">Internal staff reminders only. These are not confirmed patient appointments.</p>
+          </div>
+          <Link to="/admin/appointments?followUp=due" className="inline-flex items-center gap-2 px-4 py-2 bg-[#C9A47F] text-[#0B0B0B] text-xs font-semibold hover:bg-[#DFCAAF]">
+            Review due leads <ArrowRight className="w-3.5 h-3.5"/>
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            { label: 'Due / overdue', value: dueEnquiries.length, icon: BellRing, color: 'text-amber-300' },
+            { label: 'Upcoming', value: upcomingCount, icon: CalendarCheck, color: 'text-[#C9A47F]' },
+            { label: 'High priority', value: highPriorityCount, icon: Flag, color: 'text-rose-300' },
+            { label: 'New enquiries', value: pendingEnquiries, icon: Clock, color: 'text-blue-300' },
+          ].map(card => (
+            <div key={card.label} className="p-4 bg-[#221E1B] border border-white/10">
+              <div className={`flex items-center gap-2 text-[11px] ${card.color}`}>
+                <card.icon className="w-4 h-4"/>
+                {card.label}
+              </div>
+              <p className="font-serif text-3xl text-[#F6F0E9] mt-2">{loading ? '—' : card.value}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+          <div className="lg:col-span-3 space-y-2">
+            <div className="text-xs text-[#C9A47F] uppercase tracking-wider font-semibold mb-3">Needs staff attention</div>
+            {!loading && dueEnquiries.length === 0 && <p className="text-xs text-[#AFA89F] p-4 border border-white/5">No overdue follow-ups in the loaded enquiry records.</p>}
+            {dueEnquiries.slice(0, 5).map(e => (
+              <div key={e.id || e.referenceCode} className="flex flex-wrap items-center justify-between gap-3 border border-white/10 bg-[#151312] p-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-[#F6F0E9]">{e.fullName}</p>
+                  <p className="text-[10px] text-[#AFA89F]">Due {e.followUpDate} · {e.referenceCode}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {e.priority === 'high' && <span className="text-[10px] text-rose-300">HIGH</span>}
+                  <Link to="/admin/appointments?followUp=due" className="text-[11px] text-[#C9A47F] hover:underline">Review</Link>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="lg:col-span-2">
+            <div className="text-xs text-[#C9A47F] uppercase tracking-wider font-semibold mb-3">Lead pipeline</div>
+            {[
+              { name: 'New', count: pendingEnquiries, color: 'bg-amber-400' },
+              { name: 'Contacted', count: contactedCount, color: 'bg-blue-400' },
+              { name: 'Scheduled', count: scheduledCount, color: 'bg-emerald-400' },
+              { name: 'Closed', count: closedCount, color: 'bg-[#AFA89F]' },
+            ].map(item => (
+              <div key={item.name} className="mb-3">
+                <div className="flex items-center justify-between text-xs text-[#F6F0E9] mb-1">
+                  <span>{item.name}</span><span>{loading ? '—' : item.count}</span>
+                </div>
+                <div className="h-1.5 bg-[#2D2824] overflow-hidden">
+                  <div className={`h-full ${item.color}`} style={{ width: `${totalEnquiries ? item.count / totalEnquiries * 100 : 0}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <p className="text-[10px] text-[#7C766F]">Statistics show the latest 100 enquiries, not lifetime totals. Automatic staff email alerts require notification service configuration.</p>
+      </section>
 
       {/* Quick Access CMS Shortcuts */}
       <div>
