@@ -486,7 +486,7 @@ export async function getEnquiries(): Promise<EnquiryRecord[]> {
     }));
   } catch (err) {
     console.error('Failed to fetch enquiries:', err);
-    return [];
+    throw err;
   }
 }
 
