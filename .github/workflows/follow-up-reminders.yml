@@ -1,0 +1,30 @@
+name: Clinic staff follow-up reminders
+
+on:
+  schedule:
+    # 09:00 Asia/Kolkata (IST, UTC+05:30). GitHub schedules can run late.
+    - cron: '30 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger staff-only reminder digest
+        env:
+          CLINIC_FOLLOWUP_URL: ${{ secrets.CLINIC_FOLLOWUP_URL }}
+          CLINIC_FOLLOWUP_CRON_SECRET: ${{ secrets.CLINIC_FOLLOWUP_CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CLINIC_FOLLOWUP_URL:-}" ] || [ -z "${CLINIC_FOLLOWUP_CRON_SECRET:-}" ]; then
+            echo "Reminder endpoint/secrets not configured; no request sent."
+            exit 0
+          fi
+          curl --fail-with-body --silent --show-error \
+            --max-time 30 --retry 2 --retry-delay 3 \
+            -X POST \
+            -H "Authorization: Bearer ${CLINIC_FOLLOWUP_CRON_SECRET}" \
+            "${CLINIC_FOLLOWUP_URL}"
