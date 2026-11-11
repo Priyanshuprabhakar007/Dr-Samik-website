@@ -279,7 +279,7 @@ export const AdminDashboardPage: React.FC = () => {
             ))}
           </div>
         </div>
-        <p className="text-[10px] text-[#7C766F]">Statistics show the latest 100 enquiries, not lifetime totals. Automatic staff email alerts require notification service configuration.</p>
+        <p className="text-[10px] text-[#7C766F]">Statistics show the latest 100 enquiries, not lifetime totals. Follow-up reminders are shown inside the admin dashboard only; no automatic emails are sent.</p>
       </section>
 
       {/* Quick Access CMS Shortcuts */}
