@@ -4,8 +4,7 @@
  */
 
 import express, { Request, Response, NextFunction } from 'express';
-import { randomUUID, timingSafeEqual } from 'node:crypto';
-import { buildFollowUpNotice, buildNewEnquiryNotice, indiaDateKey, isDueFollowUp, isEmailConfigured, sendClinicEmail } from './src/server/clinicNotifications';
+import { randomUUID } from 'node:crypto';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -157,13 +156,6 @@ async function startServer() {
     try {
       const docRef = await adminDb.collection('enquiries').add(enquiryDoc);
 
-      // Staff-only notification. Failure to email cannot undo a saved request.
-      try {
-        await sendClinicEmail(buildNewEnquiryNotice(referenceCode), process.env, `new-${referenceCode}`);
-      } catch (emailError) {
-        console.error('Internal clinic email could not be delivered:', emailError);
-      }
-
       res.status(201).json({
         success: true,
         referenceCode,
@@ -176,91 +168,6 @@ async function startServer() {
       console.error('Server Firestore error saving enquiry:', err);
       // Never claim a booking was received if the database write failed.
       res.status(503).json({ success: false, error: 'Unable to save your request. Please try again later.' });
-    }
-  });
-
-  // -------------------------------------------------------------
-  // API: Daily staff follow-up reminder (scheduler-only).
-  // Configure a separate strong secret; this is NOT an admin browser endpoint.
-  // -------------------------------------------------------------
-  app.post('/api/cron/follow-ups', async (req: Request, res: Response): Promise<void> => {
-    const expectedSecret = process.env.FOLLOWUP_CRON_SECRET || '';
-    const providedSecret = req.headers.authorization?.match(/^Bearer\s+([^\s]+)$/)?.[1] || '';
-
-    if (expectedSecret.length < 32) {
-      res.status(503).json({ ok: false, error: 'Cron secret is not configured.' });
-      return;
-    }
-    const a = Buffer.from(expectedSecret);
-    const b = Buffer.from(providedSecret);
-    if (a.length !== b.length || !timingSafeEqual(a, b)) {
-      res.status(401).json({ ok: false, error: 'Unauthorized.' });
-      return;
-    }
-
-    if (!isEmailConfigured(process.env)) {
-      res.status(503).json({ ok: false, error: 'Clinic email provider is not configured.' });
-      return;
-    }
-
-    const today = indiaDateKey();
-    const dispatchRef = adminDb.collection('notification_dispatches').doc(`followup-${today}`);
-    let claimId = '';
-    try {
-      // A single-field inequality avoids composite-index requirements.
-      // To avoid a silent partial digest, fail if the query reached its cap.
-      const snapshot = await adminDb.collection('enquiries')
-        .where('followUpDate', '<=', today)
-        .limit(501)
-        .get();
-
-      if (snapshot.size === 501) {
-        res.status(409).json({ ok: false, error: 'Follow-up limit reached; paginate before sending reminders.' });
-        return;
-      }
-
-      const dueCount = snapshot.docs.filter(doc => isDueFollowUp(doc.data(), today)).length;
-      if (!dueCount) {
-        res.json({ ok: true, dueCount: 0, sent: false });
-        return;
-      }
-
-      claimId = randomUUID();
-      const claimed = await adminDb.runTransaction(async tx => {
-        const current = await tx.get(dispatchRef);
-        const prior = current.data();
-        if (prior?.status === 'sent') return false;
-        if (prior?.status === 'sending' && Date.now() - Number(prior.claimedAt || 0) < 15 * 60_000) {
-          return false;
-        }
-        tx.set(dispatchRef, {
-          status: 'sending', claimedAt: Date.now(), claimId, date: today, dueCount,
-        });
-        return true;
-      });
-
-      if (!claimed) {
-        res.json({ ok: true, dueCount, sent: false, reason: 'already-sent-or-in-progress' });
-        return;
-      }
-
-      const result = await sendClinicEmail(buildFollowUpNotice(dueCount, today), process.env, `followup-${today}`);
-      if (!result.sent) throw new Error('Email provider not configured.');
-      await dispatchRef.set({ status: 'sent', sentAt: new Date().toISOString(), claimId }, { merge: true });
-      res.json({ ok: true, dueCount, sent: true });
-    } catch (error) {
-      console.error('Staff follow-up notification failed:', error);
-      if (claimId) {
-        try {
-          const current = await dispatchRef.get();
-          if (current.data()?.claimId === claimId && current.data()?.status === 'sending') {
-            await dispatchRef.set({ status: 'failed', failedAt: new Date().toISOString() }, { merge: true });
-          }
-        } catch (updateError) {
-          console.error('Could not record notification failure:', updateError);
-        }
-      }
-      res.status(502).json({ ok: false, error: 'Unable to deliver staff follow-up reminder.' });
     }
   });
 
