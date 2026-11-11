@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   CalendarCheck,
   Search,
@@ -41,7 +42,11 @@ export const AppointmentManagerPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [procedureFilter, setProcedureFilter] = useState<string>('all');
-  const [followUpFilter, setFollowUpFilter] = useState<'all' | 'due' | 'upcoming' | 'unscheduled'>('all');
+  const [searchParams] = useSearchParams();
+  const [followUpFilter, setFollowUpFilter] = useState<'all' | 'due' | 'upcoming' | 'unscheduled'>(() => {
+    const requested = searchParams.get('followUp');
+    return requested === 'due' || requested === 'upcoming' || requested === 'unscheduled' ? requested : 'all';
+  });
   const [followUpDate, setFollowUpDate] = useState('');
   const [priority, setPriority] = useState<'normal' | 'high'>('normal');
   const [savingFollowUp, setSavingFollowUp] = useState(false);
