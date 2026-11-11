@@ -20,14 +20,19 @@ import {
   Edit3,
   X,
   FileSpreadsheet,
+  CalendarClock,
+  Flag,
+  RefreshCw,
 } from 'lucide-react';
 import {
   getEnquiries,
   updateEnquiryStatus,
+  updateEnquiryFollowUp,
   deleteEnquiry,
   EnquiryRecord,
 } from '../../lib/firestoreService';
 import { useAuth } from '../../context/AuthContext';
+import { isFollowUpDue, isFollowUpUpcoming, localDateKey } from '../../lib/enquiryFollowUp';
 
 export const AppointmentManagerPage: React.FC = () => {
   const { user } = useAuth();
@@ -36,6 +41,11 @@ export const AppointmentManagerPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [procedureFilter, setProcedureFilter] = useState<string>('all');
+  const [followUpFilter, setFollowUpFilter] = useState<'all' | 'due' | 'upcoming' | 'unscheduled'>('all');
+  const [followUpDate, setFollowUpDate] = useState('');
+  const [priority, setPriority] = useState<'normal' | 'high'>('normal');
+  const [savingFollowUp, setSavingFollowUp] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [activeEnquiry, setActiveEnquiry] = useState<EnquiryRecord | null>(null);
   const [adminNotes, setAdminNotes] = useState('');
   const [savingNote, setSavingNote] = useState(false);
@@ -47,13 +57,38 @@ export const AppointmentManagerPage: React.FC = () => {
 
   const loadList = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const data = await getEnquiries();
       setEnquiries(data);
     } catch (err) {
       console.error('Error loading enquiries:', err);
+      setLoadError('Unable to load enquiries. Check your connection and permissions, then retry.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openEnquiry = (enq: EnquiryRecord) => {
+    setActiveEnquiry(enq);
+    setAdminNotes(enq.adminNotes || '');
+    setFollowUpDate(enq.followUpDate || '');
+    setPriority(enq.priority === 'high' ? 'high' : 'normal');
+  };
+
+  const handleSaveFollowUp = async () => {
+    if (!activeEnquiry?.id) return;
+    setSavingFollowUp(true);
+    try {
+      await updateEnquiryFollowUp(activeEnquiry.id, followUpDate, priority, user?.email || undefined);
+      const update = { followUpDate, priority };
+      setEnquiries(prev => prev.map(e => e.id === activeEnquiry.id ? { ...e, ...update } : e));
+      setActiveEnquiry({ ...activeEnquiry, ...update });
+      setNotification({ type: 'success', message: 'Follow-up plan saved successfully.' });
+    } catch (err) {
+      setNotification({ type: 'error', message: err instanceof Error ? err.message : 'Unable to save follow-up.' });
+    } finally {
+      setSavingFollowUp(false);
     }
   };
 
@@ -113,13 +148,13 @@ export const AppointmentManagerPage: React.FC = () => {
       setNotification({ type: 'error', message: 'No matching enquiries to export.' });
       return;
     }
-    const headers = ['Reference Code','Full Name','Phone','Email','Treatment','Consultation Type','Preferred Date','Preferred Time','Status','Created At','Clinical Notes','Admin Notes'];
+    const headers = ['Reference Code','Full Name','Phone','Email','Treatment','Consultation Type','Preferred Date','Preferred Time','Status','Follow-up Date','Priority','Created At','Clinical Notes','Admin Notes'];
     const cell = (value: unknown) => {
       const raw = String(value ?? '');
       const safe = /^\s*[=+\-@]/.test(raw) ? "'" + raw : raw;
       return '"' + safe.replace(/"/g, '""') + '"';
     };
-    const rows = filteredEnquiries.map(e => [e.referenceCode,e.fullName,e.phone,e.email,e.treatmentInterest,e.consultationType,e.preferredDate,e.preferredTime,e.status,e.createdAt,e.clinicalNotes || '',e.adminNotes || '']);
+    const rows = filteredEnquiries.map(e => [e.referenceCode,e.fullName,e.phone,e.email,e.treatmentInterest,e.consultationType,e.preferredDate,e.preferredTime,e.status,e.followUpDate || '',e.priority || 'normal',e.createdAt,e.clinicalNotes || '',e.adminNotes || '']);
     const csv = '\uFEFF' + [headers,...rows].map(row => row.map(cell).join(',')).join('\r\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a');
@@ -130,6 +165,12 @@ export const AppointmentManagerPage: React.FC = () => {
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
+
+  // Date-only follow-ups use the local calendar day (not UTC).
+  const today = localDateKey();
+  const dueCount = enquiries.filter(e => isFollowUpDue(e, today)).length;
+  const upcomingCount = enquiries.filter(e => isFollowUpUpcoming(e, today)).length;
+  const highPriorityCount = enquiries.filter(e => e.priority === 'high' && e.status !== 'closed').length;
 
   // Filtered List
   const filteredEnquiries = useMemo(() => {
@@ -143,10 +184,20 @@ export const AppointmentManagerPage: React.FC = () => {
 
       const matchStatus = statusFilter === 'all' || e.status === statusFilter;
       const matchProcedure = procedureFilter === 'all' || e.treatmentInterest === procedureFilter;
+      const matchFollowUp = followUpFilter === 'all' ||
+        (followUpFilter === 'due' && isFollowUpDue(e, today)) ||
+        (followUpFilter === 'upcoming' && isFollowUpUpcoming(e, today)) ||
+        (followUpFilter === 'unscheduled' && !e.followUpDate);
 
-      return matchSearch && matchStatus && matchProcedure;
+      return matchSearch && matchStatus && matchProcedure && matchFollowUp;
+    }).sort((a, b) => {
+      const dueA = isFollowUpDue(a, today) ? 1 : 0;
+      const dueB = isFollowUpDue(b, today) ? 1 : 0;
+      if (dueA !== dueB) return dueB - dueA;
+      if ((a.priority === 'high') !== (b.priority === 'high')) return a.priority === 'high' ? -1 : 1;
+      return b.createdAt.localeCompare(a.createdAt);
     });
-  }, [enquiries, searchQuery, statusFilter, procedureFilter]);
+  }, [enquiries, searchQuery, statusFilter, procedureFilter, followUpFilter, today]);
 
   const uniqueProcedures = useMemo(() => {
     const list = Array.from(new Set(enquiries.map((e) => e.treatmentInterest))).filter(Boolean);
@@ -191,10 +242,29 @@ export const AppointmentManagerPage: React.FC = () => {
         </div>
       )}
 
+      {/* Follow-up work queue summary; limited to the most recent 100 enquiries loaded. */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" aria-label="Follow-up summary">
+        <button type="button" onClick={() => setFollowUpFilter('due')} className={`text-left bg-[#181514] border p-4 hover:border-[#C9A47F] transition-colors ${followUpFilter === 'due' ? 'border-[#C9A47F]' : 'border-white/10'}`}>
+          <div className="flex items-center gap-2 text-amber-300 text-[11px] uppercase tracking-widest"><CalendarClock className="w-4 h-4" /> Due or overdue</div>
+          <div className="text-3xl font-serif text-[#F6F0E9] mt-2">{dueCount}</div>
+        </button>
+        <button type="button" onClick={() => setFollowUpFilter('upcoming')} className={`text-left bg-[#181514] border p-4 hover:border-[#C9A47F] transition-colors ${followUpFilter === 'upcoming' ? 'border-[#C9A47F]' : 'border-white/10'}`}>
+          <div className="flex items-center gap-2 text-[#C9A47F] text-[11px] uppercase tracking-widest"><Clock className="w-4 h-4" /> Upcoming follow-ups</div>
+          <div className="text-3xl font-serif text-[#F6F0E9] mt-2">{upcomingCount}</div>
+        </button>
+        <div className="bg-[#181514] border border-white/10 p-4">
+          <div className="flex items-center gap-2 text-rose-300 text-[11px] uppercase tracking-widest"><Flag className="w-4 h-4" /> High priority</div>
+          <div className="text-3xl font-serif text-[#F6F0E9] mt-2">{highPriorityCount}</div>
+        </div>
+      </div>
+      <p className="text-[11px] text-[#7C766F]">Work queue covers up to 100 most recent enquiries. Dates are for staff follow-up only, not confirmed appointment slots.</p>
+
+      {loadError && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-200"><span>{loadError}</span><button type="button" className="inline-flex items-center gap-2 underline" onClick={loadList}><RefreshCw className="w-3.5 h-3.5"/>Retry</button></div>}
+
       {/* Search and Filters Bar */}
       <div className="bg-[#181514] border border-[#C9A47F]/20 p-4 grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
         {/* Search */}
-        <div className="sm:col-span-6 relative">
+        <div className="sm:col-span-5 relative">
           <Search className="w-4 h-4 text-[#AFA89F] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
@@ -206,7 +276,7 @@ export const AppointmentManagerPage: React.FC = () => {
         </div>
 
         {/* Status Filter */}
-        <div className="sm:col-span-3">
+        <div className="sm:col-span-2">
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
@@ -235,6 +305,14 @@ export const AppointmentManagerPage: React.FC = () => {
             ))}
           </select>
         </div>
+        <div className="sm:col-span-2">
+          <select aria-label="Follow-up filter" value={followUpFilter} onChange={e => setFollowUpFilter(e.target.value as typeof followUpFilter)} className="w-full bg-[#12100F] border border-white/10 p-2 text-xs text-[#F6F0E9] focus:outline-none focus:border-[#C9A47F]">
+            <option value="all">All follow-ups</option>
+            <option value="due">Due / overdue</option>
+            <option value="upcoming">Upcoming</option>
+            <option value="unscheduled">No follow-up date</option>
+          </select>
+        </div>
       </div>
 
       {/* Main Table */}
@@ -255,6 +333,7 @@ export const AppointmentManagerPage: React.FC = () => {
                   <th className="py-3 px-4">Patient Information</th>
                   <th className="py-3 px-4">Procedure</th>
                   <th className="py-3 px-4">Requested Slot</th>
+                  <th className="py-3 px-4">Follow-up</th>
                   <th className="py-3 px-4">Format</th>
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4 text-right">Actions</th>
@@ -265,10 +344,7 @@ export const AppointmentManagerPage: React.FC = () => {
                   <tr
                     key={enq.id || enq.referenceCode}
                     className="hover:bg-white/[0.02] cursor-pointer transition-colors"
-                    onClick={() => {
-                      setActiveEnquiry(enq);
-                      setAdminNotes(enq.adminNotes || '');
-                    }}
+                    onClick={() => openEnquiry(enq)}
                   >
                     <td className="py-3.5 px-4 font-mono text-[11px] text-[#C9A47F] whitespace-nowrap">
                       {enq.referenceCode}
@@ -300,6 +376,13 @@ export const AppointmentManagerPage: React.FC = () => {
                     <td className="py-3.5 px-4 whitespace-nowrap">
                       <p className="text-[#F6F0E9]">{enq.preferredDate || 'Not specified'}</p>
                       <p className="text-[10px] text-[#AFA89F]">{enq.preferredTime}</p>
+                    </td>
+
+                    <td className="py-3.5 px-4 whitespace-nowrap">
+                      <p className={`text-[11px] ${isFollowUpDue(enq, today) ? 'font-semibold text-amber-300' : 'text-[#AFA89F]'}`}>
+                        {enq.followUpDate || 'Not set'}
+                      </p>
+                      {enq.priority === 'high' && <span className="text-[9px] uppercase tracking-wider text-rose-300">High priority</span>}
                     </td>
 
                     <td className="py-3.5 px-4 whitespace-nowrap">
@@ -434,6 +517,29 @@ export const AppointmentManagerPage: React.FC = () => {
                 </div>
               </div>
             )}
+
+            {/* Internal follow-up plan */}
+            <div className="bg-[#141211] border border-[#C9A47F]/20 p-4 space-y-3">
+              <div className="flex items-center gap-2 text-[#C9A47F] text-xs uppercase tracking-wider font-medium"><CalendarClock className="w-4 h-4"/> Follow-up Plan</div>
+              <p className="text-[11px] text-[#AFA89F]">Internal staff reminder only. Does not send notifications or confirm an appointment.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="text-xs text-[#AFA89F] space-y-1.5">
+                  <span className="block">Next contact date</span>
+                  <input aria-label="Next contact date" type="date" value={followUpDate} onChange={e => setFollowUpDate(e.target.value)} className="w-full bg-[#12100F] border border-white/10 p-2.5 text-[#F6F0E9] focus:border-[#C9A47F]"/>
+                </label>
+                <label className="text-xs text-[#AFA89F] space-y-1.5">
+                  <span className="block">Priority</span>
+                  <select aria-label="Lead priority" value={priority} onChange={e => setPriority(e.target.value as 'normal' | 'high')} className="w-full bg-[#12100F] border border-white/10 p-2.5 text-[#F6F0E9] focus:border-[#C9A47F]">
+                    <option value="normal">Normal</option>
+                    <option value="high">High</option>
+                  </select>
+                </label>
+              </div>
+              <div className="flex flex-wrap items-center justify-end gap-3">
+                <button type="button" onClick={() => setFollowUpDate('')} className="text-xs text-[#AFA89F] hover:text-[#F6F0E9] underline">Clear date</button>
+                <button type="button" onClick={handleSaveFollowUp} disabled={savingFollowUp} className="px-4 py-2 bg-[#C9A47F] text-[#0B0B0B] text-xs font-semibold uppercase tracking-wider disabled:opacity-60">{savingFollowUp ? 'Saving...' : 'Save follow-up'}</button>
+              </div>
+            </div>
 
             {/* Internal Staff Notes */}
             <div className="space-y-2">
