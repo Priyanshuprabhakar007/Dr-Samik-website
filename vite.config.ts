@@ -1,11 +1,34 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import fs from 'node:fs';
 import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      react(),
+      tailwindcss(),
+      // Legacy CMS image URLs already stored in Firestore use /src/assets/images/.
+      // Copy source images to the same public paths in the production build,
+      // without renaming paths or requiring risky Firestore migrations.
+      {
+        name: 'preserve-legacy-cms-image-urls',
+        apply: 'build' as const,
+        generateBundle(this: any) {
+          const dir = path.resolve(__dirname, 'src/assets/images');
+          if (!fs.existsSync(dir)) return;
+          for (const file of fs.readdirSync(dir)) {
+            if (!/\.(?:jpg|jpeg|png|webp|svg)$/i.test(file)) continue;
+            this.emitFile({
+              type: 'asset',
+              fileName: `src/assets/images/${file}`,
+              source: fs.readFileSync(path.join(dir, file)),
+            });
+          }
+        },
+      },
+    ],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
