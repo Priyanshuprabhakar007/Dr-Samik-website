@@ -48,6 +48,8 @@ export const AdminLayout: React.FC = () => {
       getEnquiries().then((items) => {
         const newCount = items.filter((i) => i.status === 'new').length;
         setPendingEnquiriesCount(newCount);
+      }).catch((err) => {
+        console.error('Unable to load pending enquiry count:', err);
       });
     }
   }, [user, isAdmin]);
