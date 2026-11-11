@@ -50,6 +50,7 @@ export function buildFollowUpNotice(dueCount: number, date: string) {
 export async function sendClinicEmail(
   message: { subject: string; text: string },
   env: NotificationEnv = process.env,
+  idempotencyKey?: string,
 ): Promise<NotificationResult> {
   if (!isEmailConfigured(env)) return { sent: false, reason: 'not-configured' };
   const response = await fetch('https://api.resend.com/emails', {
@@ -57,6 +58,8 @@ export async function sendClinicEmail(
     headers: {
       Authorization: `Bearer ${env.RESEND_API_KEY!.trim()}`,
       'Content-Type': 'application/json',
+      'User-Agent': 'DrSamikSharmaWebsite/1.0',
+      ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
     },
     body: JSON.stringify({
       from: env.CLINIC_NOTIFICATION_FROM!.trim(),
