@@ -159,7 +159,7 @@ async function startServer() {
 
       // Staff-only notification. Failure to email cannot undo a saved request.
       try {
-        await sendClinicEmail(buildNewEnquiryNotice(referenceCode));
+        await sendClinicEmail(buildNewEnquiryNotice(referenceCode), process.env, `new-${referenceCode}`);
       } catch (emailError) {
         console.error('Internal clinic email could not be delivered:', emailError);
       }
@@ -244,7 +244,7 @@ async function startServer() {
         return;
       }
 
-      const result = await sendClinicEmail(buildFollowUpNotice(dueCount, today));
+      const result = await sendClinicEmail(buildFollowUpNotice(dueCount, today), process.env, `followup-${today}`);
       if (!result.sent) throw new Error('Email provider not configured.');
       await dispatchRef.set({ status: 'sent', sentAt: new Date().toISOString(), claimId }, { merge: true });
       res.json({ ok: true, dueCount, sent: true });
