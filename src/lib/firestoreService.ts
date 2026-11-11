@@ -19,6 +19,7 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
+import { isValidDateKey } from './enquiryFollowUp';
 import { TREATMENTS_DATA, CLINIC_INFO, TreatmentItem } from '../data/surgeryData';
 export type { TreatmentItem };
 
@@ -38,6 +39,9 @@ export interface EnquiryRecord {
   createdAt: string;
   updatedAt?: string;
   adminNotes?: string;
+  /** The next date when staff should contact this enquiry (local YYYY-MM-DD). */
+  followUpDate?: string;
+  priority?: 'normal' | 'high';
 }
 
 export interface HomepageData {
@@ -508,6 +512,27 @@ export async function updateEnquiryStatus(
     console.error('Failed to update enquiry status:', err);
     throw err;
   }
+}
+
+/** Save admin-only follow-up planning; never changes the patient's requested appointment date. */
+export async function updateEnquiryFollowUp(
+  id: string,
+  followUpDate: string,
+  priority: 'normal' | 'high',
+  userEmail?: string
+): Promise<void> {
+  if (!id || (priority !== 'normal' && priority !== 'high')) {
+    throw new Error('Invalid enquiry or priority');
+  }
+  if (followUpDate && !isValidDateKey(followUpDate)) {
+    throw new Error('Please provide a valid follow-up date.');
+  }
+  await updateDoc(doc(db, 'enquiries', id), {
+    followUpDate,
+    priority,
+    updatedAt: new Date().toISOString(),
+  });
+  await logAudit('UPDATE_FOLLOW_UP', 'enquiries', id, 'Updated follow-up schedule and priority', userEmail);
 }
 
 export async function deleteEnquiry(id: string, userEmail?: string): Promise<boolean> {
