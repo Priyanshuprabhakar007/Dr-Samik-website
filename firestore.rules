@@ -1,0 +1,112 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened Helper Functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwnerEmail() {
+      return isEmailVerified() && request.auth.token.email == "dilseinvite@gmail.com";
+    }
+
+    // Verifies admin via custom claims, owner email, or explicit database document
+    function isAdmin() {
+      return isSignedIn() && isEmailVerified() && (
+        isOwnerEmail() ||
+        request.auth.token.admin == true ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // 1. Admins Collection
+    // Read: authenticated user themselves or verified admin
+    // Write: STRICTLY restricted to practice owner (dilseinvite@gmail.com) - no self-assignment
+    match /admins/{uid} {
+      allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+      allow write: if isOwnerEmail();
+    }
+
+    // 2. Enquiries Collection (Patient Consultation Intake)
+    // Public write: strict validation schema
+    // Read/Update/Delete: STRICTLY ADMIN ONLY - Never accessible to public or anonymous users
+    match /enquiries/{enquiryId} {
+      allow create: if (
+        isValidId(enquiryId) &&
+        request.resource.data.keys().hasAll(['fullName', 'phone', 'email', 'procedure', 'preferredDate', 'status']) &&
+        request.resource.data.fullName is string && request.resource.data.fullName.size() >= 2 && request.resource.data.fullName.size() <= 100 &&
+        request.resource.data.phone is string && request.resource.data.phone.size() >= 7 && request.resource.data.phone.size() <= 30 &&
+        request.resource.data.email is string && request.resource.data.email.size() <= 100 &&
+        request.resource.data.procedure is string && request.resource.data.procedure.size() <= 100 &&
+        request.resource.data.preferredDate is string && request.resource.data.preferredDate.size() <= 30 &&
+        request.resource.data.status == 'new'
+      );
+      allow get, list, update, delete: if isAdmin();
+    }
+
+    // 3. Homepage Content
+    // Public can ONLY read published document. Draft is strictly restricted to admin.
+    match /homepage_content/{contentId} {
+      allow get: if contentId == 'published' || isAdmin();
+      allow list: if isAdmin() || resource.id == 'published';
+      allow write: if isAdmin();
+    }
+
+    // Homepage Revisions History (Atomic snapshots for rollback, admin only)
+    match /homepage_revisions/{revId} {
+      allow read, write: if isAdmin();
+    }
+
+    // 4. About Content
+    // Public can ONLY read published document.
+    match /about_content/{contentId} {
+      allow get: if contentId == 'published' || isAdmin();
+      allow list: if isAdmin() || resource.id == 'published';
+      allow write: if isAdmin();
+    }
+
+    // 5. Treatments Collection
+    // Public can ONLY read published procedures. Drafts/Archived are restricted to admin.
+    match /treatments/{treatmentId} {
+      allow get: if (resource != null && resource.data.status == 'published') || isAdmin();
+      allow list: if (resource != null && resource.data.status == 'published') || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // 6. Blog Posts Collection
+    // Public can ONLY read published articles. Drafts are restricted to admin.
+    match /blog_posts/{postId} {
+      allow get: if (resource != null && resource.data.status == 'published') || isAdmin();
+      allow list: if (resource != null && resource.data.status == 'published') || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // 7. Practice Settings
+    // Public read for hospital coordinates; writes restricted to admin.
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 8. Administrative Audit Logs
+    // Strictly restricted to admins
+    match /audit_logs/{logId} {
+      allow read, write: if isAdmin();
+    }
+
+  }
+}

@@ -1,0 +1,204 @@
+{
+  "entities": {
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Authorized administrator or owner account with access to the CMS",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["owner", "admin"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Enquiry": {
+      "title": "Enquiry",
+      "description": "Patient consultation booking request submitted via the website",
+      "type": "object",
+      "properties": {
+        "fullName": { "type": "string", "maxLength": 100 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "email": { "type": "string", "format": "email", "maxLength": 100 },
+        "consultType": { "type": "string", "enum": ["in-person", "virtual"] },
+        "procedure": { "type": "string", "maxLength": 100 },
+        "preferredDate": { "type": "string", "maxLength": 20 },
+        "preferredTime": { "type": "string", "maxLength": 20 },
+        "notes": { "type": "string", "maxLength": 1000 },
+        "status": { "type": "string", "enum": ["new", "contacted", "scheduled", "closed"] },
+        "referenceCode": { "type": "string", "maxLength": 30 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["fullName", "phone", "email", "procedure", "preferredDate", "status"]
+    },
+    "HomepageContent": {
+      "title": "HomepageContent",
+      "description": "Customizable homepage copy, hero imagery, and section texts",
+      "type": "object",
+      "properties": {
+        "heroEyebrow": { "type": "string", "maxLength": 100 },
+        "heroTitle": { "type": "string", "maxLength": 150 },
+        "heroHighlightWord": { "type": "string", "maxLength": 50 },
+        "heroDescription": { "type": "string", "maxLength": 500 },
+        "heroCtaText": { "type": "string", "maxLength": 50 },
+        "heroSecondaryCtaText": { "type": "string", "maxLength": 50 },
+        "heroImage": { "type": "string" },
+        "approachHeading": { "type": "string", "maxLength": 100 },
+        "approachHighlightedWord": { "type": "string", "maxLength": 50 },
+        "approachDescription": { "type": "string", "maxLength": 500 },
+        "consultationHeading": { "type": "string", "maxLength": 100 },
+        "consultationHighlightedWord": { "type": "string", "maxLength": 50 },
+        "consultationDescription": { "type": "string", "maxLength": 500 },
+        "updatedAt": { "type": "string" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["heroTitle", "heroHighlightWord", "heroDescription"]
+    },
+    "AboutContent": {
+      "title": "AboutContent",
+      "description": "Doctor biographical details, qualifications, and hospital affiliation",
+      "type": "object",
+      "properties": {
+        "doctorName": { "type": "string", "maxLength": 100 },
+        "doctorRole": { "type": "string", "maxLength": 150 },
+        "degrees": { "type": "string", "maxLength": 200 },
+        "fellowships": { "type": "array" },
+        "hospital": { "type": "string", "maxLength": 150 },
+        "bioParagraph": { "type": "string", "maxLength": 1500 },
+        "quoteText": { "type": "string", "maxLength": 300 },
+        "portraitUrl": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["doctorName", "doctorRole", "degrees", "hospital"]
+    },
+    "TreatmentDocument": {
+      "title": "TreatmentDocument",
+      "description": "Comprehensive clinical procedure document for CMS management",
+      "type": "object",
+      "properties": {
+        "slug": { "type": "string", "maxLength": 100 },
+        "title": { "type": "string", "maxLength": 100 },
+        "category": { "type": "string", "enum": ["facial", "body", "hair", "reconstructive"] },
+        "categoryLabel": { "type": "string", "maxLength": 50 },
+        "tagline": { "type": "string", "maxLength": 150 },
+        "heroImage": { "type": "string" },
+        "summary": { "type": "string", "maxLength": 500 },
+        "duration": { "type": "string", "maxLength": 50 },
+        "anesthesia": { "type": "string", "maxLength": 100 },
+        "recoverySummary": { "type": "string", "maxLength": 200 },
+        "clinicalApproach": { "type": "string", "maxLength": 1000 },
+        "indications": { "type": "array" },
+        "status": { "type": "string", "enum": ["published", "draft", "archived"] },
+        "order": { "type": "number" },
+        "seoTitle": { "type": "string", "maxLength": 150 },
+        "seoDescription": { "type": "string", "maxLength": 300 },
+        "updatedAt": { "type": "string" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["slug", "title", "category", "status"]
+    },
+    "BlogPost": {
+      "title": "BlogPost",
+      "description": "Educational aesthetic surgery articles and news",
+      "type": "object",
+      "properties": {
+        "slug": { "type": "string", "maxLength": 100 },
+        "title": { "type": "string", "maxLength": 150 },
+        "summary": { "type": "string", "maxLength": 350 },
+        "content": { "type": "string" },
+        "coverImage": { "type": "string" },
+        "category": { "type": "string", "maxLength": 50 },
+        "readTime": { "type": "string", "maxLength": 20 },
+        "author": { "type": "string", "maxLength": 100 },
+        "status": { "type": "string", "enum": ["published", "draft"] },
+        "publishedAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["slug", "title", "summary", "status"]
+    },
+    "SiteSettings": {
+      "title": "SiteSettings",
+      "description": "Global practice settings and contact coordinates",
+      "type": "object",
+      "properties": {
+        "hospitalName": { "type": "string", "maxLength": 100 },
+        "hospitalAddress": { "type": "string", "maxLength": 200 },
+        "contactPhone": { "type": "string", "maxLength": 30 },
+        "contactEmail": { "type": "string", "format": "email", "maxLength": 100 },
+        "whatsappNumber": { "type": "string", "maxLength": 30 },
+        "instagramHandle": { "type": "string", "maxLength": 50 },
+        "consultationNotice": { "type": "string", "maxLength": 500 },
+        "updatedAt": { "type": "string" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["hospitalName", "contactEmail"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Traceable records of CMS administrative updates",
+      "type": "object",
+      "properties": {
+        "action": { "type": "string", "maxLength": 100 },
+        "collectionName": { "type": "string", "maxLength": 50 },
+        "documentId": { "type": "string", "maxLength": 100 },
+        "performedBy": { "type": "string" },
+        "performedByEmail": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["action", "performedBy", "timestamp"]
+    },
+    "HomepageRevision": {
+      "title": "HomepageRevision",
+      "description": "Historical snapshot of published homepage content for audit and rollback",
+      "type": "object",
+      "properties": {
+        "publishedAt": { "type": "string" },
+        "publishedBy": { "type": "string" },
+        "snapshot": { "type": "object" },
+        "note": { "type": "string" }
+      },
+      "required": ["publishedAt", "publishedBy", "snapshot"]
+    }
+  },
+  "firestore": {
+    "/admins/{uid}": {
+      "schema": "AdminUser",
+      "description": "Stores authorized CMS administrator accounts"
+    },
+    "/enquiries/{enquiryId}": {
+      "schema": "Enquiry",
+      "description": "Stores patient consultation booking inquiries"
+    },
+    "/homepage_content/{contentId}": {
+      "schema": "HomepageContent",
+      "description": "Stores draft and published homepage texts and layouts"
+    },
+    "/homepage_revisions/{revId}": {
+      "schema": "HomepageRevision",
+      "description": "Stores version history snapshots for instant homepage rollback"
+    },
+    "/about_content/{contentId}": {
+      "schema": "AboutContent",
+      "description": "Stores doctor biography and credentials content"
+    },
+    "/treatments/{treatmentId}": {
+      "schema": "TreatmentDocument",
+      "description": "Stores clinical procedure details for public website and CMS"
+    },
+    "/blog_posts/{postId}": {
+      "schema": "BlogPost",
+      "description": "Stores educational surgery articles and updates"
+    },
+    "/settings/{settingId}": {
+      "schema": "SiteSettings",
+      "description": "Stores global practice coordinates and social profiles"
+    },
+    "/audit_logs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Stores administrative audit activity trail"
+    }
+  }
+}
