@@ -67,12 +67,12 @@ export const Hero: React.FC<HeroProps> = ({ onOpenBooking, heroData }) => {
             {/* Oversized luxury serif headline */}
             <motion.h1
               variants={itemVariants}
-              className="text-4xl sm:text-5xl md:text-6xl lg:text-[4.75rem] xl:text-[5.25rem] font-serif font-light text-[#F6F0E9] leading-[1.04] tracking-[-0.015em] mb-7 max-w-2xl text-balance"
+              className="text-[2.65rem] sm:text-[3.3rem] md:text-[4.15rem] lg:text-[4.65rem] xl:text-[5rem] font-serif font-normal text-[#F6F0E9] leading-[1.09] tracking-[-0.045em] mb-7 max-w-2xl text-balance"
             >
               {heroData ? (
                 <>
                   {heroData.headlinePart1}{' '}
-                  <span className="font-serif italic font-normal text-[#C9A47F] inline-block tracking-normal">
+                  <span className="font-serif italic font-medium text-[#C9A47F] inline-block tracking-[-0.04em]">
                     {heroData.headlineHighlight}
                   </span>
                 </>
@@ -80,7 +80,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenBooking, heroData }) => {
                 <>
                   RESHAPING FORM, <br className="hidden sm:inline" />
                   RESTORING{' '}
-                  <span className="font-serif italic font-normal text-[#C9A47F] inline-block tracking-normal">
+                  <span className="font-serif italic font-medium text-[#C9A47F] inline-block tracking-[-0.04em]">
                     CONFIDENCE
                   </span>
                 </>
@@ -90,7 +90,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenBooking, heroData }) => {
             {/* Short clear supporting description */}
             <motion.p
               variants={itemVariants}
-              className="text-base sm:text-lg text-[#AFA89F] font-light leading-relaxed max-w-xl mb-10 font-sans"
+              className="text-base sm:text-lg text-[#C4B9AC] font-normal leading-[1.8] max-w-xl mb-10 font-sans"
             >
               {heroData?.description ||
                 'Under the surgical direction of Dr. Samik Sharma, UK-fellowship trained plastic & aesthetic surgeon. Harmonizing anatomical structural precision with restrained artistry to achieve natural, enduring results.'}
