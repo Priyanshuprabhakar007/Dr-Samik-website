@@ -39,22 +39,22 @@ export const Hero: React.FC<HeroProps> = ({ onOpenBooking, heroData }) => {
   return (
     <section
       id="home"
-      className="relative min-h-screen flex items-center bg-[#0B0B0B] overflow-hidden pt-28 lg:pt-0"
+      className="relative min-h-[100svh] flex items-center bg-[#0B0B0B] overflow-hidden pt-24 sm:pt-28 lg:pt-0"
     >
       {/* Background Architectural & Atmospheric Elements */}
       <div className="absolute inset-0 pointer-events-none luxury-noise opacity-40 z-0" />
       <div className="absolute top-1/3 left-8 w-[500px] h-[500px] bg-[radial-gradient(circle,rgba(201,164,127,0.08)_0%,transparent_70%)] blur-2xl pointer-events-none" />
 
       {/* Main Full-Width Edge-to-Edge Grid with 1440px Max Bounds */}
-      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-24 relative z-10">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 lg:py-24 relative z-10">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 sm:gap-12 lg:gap-8 items-center">
           
           {/* Left Column: Editorial Typography & Staggered Entrance (7 cols) */}
           <motion.div
             variants={containerVariants}
             initial="hidden"
             animate="visible"
-            className="lg:col-span-7 flex flex-col justify-center pr-0 lg:pr-8"
+            className="lg:col-span-7 min-w-0 flex flex-col justify-center pr-0 lg:pr-8"
           >
             {/* Small uppercase eyebrow */}
             <motion.div variants={itemVariants} className="inline-flex items-center gap-3 mb-6">
@@ -67,7 +67,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenBooking, heroData }) => {
             {/* Oversized luxury serif headline */}
             <motion.h1
               variants={itemVariants}
-              className="text-[2.65rem] sm:text-[3.3rem] md:text-[4.15rem] lg:text-[4.65rem] xl:text-[5rem] font-serif font-normal text-[#F6F0E9] leading-[1.09] tracking-[-0.045em] mb-7 max-w-2xl text-balance"
+              className="text-[clamp(2.2rem,10.2vw,2.9rem)] sm:text-[3.3rem] md:text-[4.15rem] lg:text-[4.65rem] xl:text-[5rem] font-serif font-normal text-[#F6F0E9] leading-[1.09] tracking-[-0.045em] mb-7 max-w-2xl text-balance break-words"
             >
               {heroData ? (
                 <>
@@ -122,7 +122,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenBooking, heroData }) => {
             {/* Credential trust markers */}
             <motion.div
               variants={itemVariants}
-              className="pt-6 border-t border-[#C9A47F]/20 flex flex-wrap items-center gap-6 sm:gap-8 text-xs text-[#AFA89F]"
+              className="pt-6 border-t border-[#C9A47F]/20 flex flex-wrap items-center gap-3 sm:gap-8 text-xs text-[#AFA89F]"
             >
               <div className="flex items-center gap-2.5">
                 <Award className="w-4 h-4 text-[#C9A47F] shrink-0" />
@@ -157,7 +157,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenBooking, heroData }) => {
               initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 1, delay: 0.3, ease: [0.16, 1, 0.3, 1] as const }}
-              className="relative w-full max-w-md lg:max-w-none aspect-[3/4] overflow-hidden shadow-2xl shadow-black z-10 border-b border-[#C9A47F]/50 group"
+              className="relative w-full max-w-md lg:max-w-none aspect-[4/4.1] sm:aspect-[3/4] overflow-hidden shadow-2xl shadow-black z-10 border-b border-[#C9A47F]/50 group"
             >
               <img
                 src={heroData?.heroImage || '/src/assets/images/hero_editorial_beauty_1794213535182.jpg'}
