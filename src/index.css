@@ -40,6 +40,28 @@
   background-size: 24px 24px;
 }
 
+/* Mobile-first behavior: prevent iOS Safari auto-zoom in forms and long
+   user-entered text from forcing an entire page wider than the viewport. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+#root {
+  min-width: 0;
+  overflow-x: clip;
+}
+@media (max-width: 639px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .scroll-smooth { scroll-behavior: auto; }
+}
+
 /* Custom delicate gold scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
