@@ -67,17 +67,17 @@ export const Header: React.FC<HeaderProps> = ({ onOpenBooking }) => {
               </div>
 
               <div className="flex flex-col">
-                <span className="text-sm sm:text-base md:text-[17px] font-serif font-medium tracking-[0.2em] text-[#F6F0E9] group-hover:text-white transition-colors duration-200 leading-tight uppercase">
+                <span className="text-[17px] sm:text-[19px] md:text-[21px] font-serif font-semibold tracking-[0.075em] text-[#F6F0E9] group-hover:text-white transition-colors duration-200 leading-tight uppercase">
                   DR. SAMIK SHARMA
                 </span>
-                <span className="text-[9px] sm:text-[10px] font-sans tracking-[0.24em] text-[#C9A47F] uppercase font-light">
+                <span className="text-[9px] sm:text-[10px] font-sans tracking-[0.19em] text-[#C9A47F] uppercase font-light">
                   PLASTIC &amp; AESTHETIC SURGEON
                 </span>
               </div>
             </Link>
 
             {/* Middle: Desktop Navigation Links with Smooth Underline */}
-            <nav className="hidden lg:flex items-center gap-9 text-[13px] font-sans font-medium tracking-[0.08em] text-[#AFA89F]">
+            <nav className="hidden lg:flex items-center gap-8 xl:gap-9 text-[13px] font-sans font-medium tracking-[0.025em] text-[#AFA89F]">
               {navLinks.map((link) => {
                 const isAnchor = link.href.includes('#');
                 const isActive = link.href === location.pathname;
