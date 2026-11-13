@@ -20,7 +20,7 @@ async function checkRateLimit(
   const encode = (key: string) => createHmac('sha256', secret).update(key).digest('hex');
   const keys = [
     { key: encode(`ip:${ip}:${windowId}`), max: 10 },
-    { key: encode(`phone:${phone.replace(/\\D/g, '')}:${windowId}`), max: 4 },
+    { key: encode(`phone:${phone.replace(/\D/g, '')}:${windowId}`), max: 4 },
   ];
   const refs = keys.map(item => db.collection('enquiry_rate_limits').doc(item.key));
   await db.runTransaction(async tx => {
