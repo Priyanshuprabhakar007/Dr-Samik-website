@@ -83,7 +83,6 @@ export const Hero: React.FC<HeroProps> = ({ onOpenBooking, heroData }) => {
   const prefersReducedMotion = useReducedMotion();
   const [activeIndex, setActiveIndex] = useState(0);
   const [manualPause, setManualPause] = useState(false);
-  const [hoverPause, setHoverPause] = useState(false);
   const [focusPause, setFocusPause] = useState(false);
   const [documentVisible, setDocumentVisible] = useState(true);
   const touchStartX = useRef<number | null>(null);
@@ -119,7 +118,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenBooking, heroData }) => {
   }, [heroData]);
 
   const slide = slides[activeIndex] || slides[0];
-  const isPaused = manualPause || hoverPause || focusPause || !documentVisible;
+  const isPaused = manualPause || focusPause || !documentVisible;
   const allowAutoAdvance = !prefersReducedMotion && !isPaused;
 
   const moveTo = useCallback((index: number) => {
@@ -162,7 +161,6 @@ export const Hero: React.FC<HeroProps> = ({ onOpenBooking, heroData }) => {
     else previous();
   };
 
-  const isAnchorLink = slide.link.startsWith('#');
   const isInternalLink = slide.link.startsWith('/') && !slide.link.startsWith('//');
 
   const secondaryButtonClass =
@@ -173,8 +171,6 @@ export const Hero: React.FC<HeroProps> = ({ onOpenBooking, heroData }) => {
       id="home"
       aria-label="Featured treatments and surgical care"
       className="relative isolate min-h-[100svh] overflow-hidden bg-[#0C0B0A] text-[#F6F0E9]"
-      onMouseEnter={() => setHoverPause(true)}
-      onMouseLeave={() => setHoverPause(false)}
       onFocusCapture={() => setFocusPause(true)}
       onBlurCapture={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocusPause(false);
@@ -251,7 +247,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenBooking, heroData }) => {
                   <ArrowRight aria-hidden="true" className="size-4 shrink-0 transition-transform group-hover:translate-x-1" />
                 </Link>
               ) : (
-                <a href={isAnchorLink ? slide.link : slide.link} className={secondaryButtonClass}>
+                <a href={slide.link} className={secondaryButtonClass}>
                   {slide.linkLabel}
                   <ArrowRight aria-hidden="true" className="size-4 shrink-0 transition-transform group-hover:translate-x-1" />
                 </a>
