@@ -48,6 +48,21 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
     if (initialTreatment && isOpen && !submitted) setConcern(initialTreatment);
   }, [initialTreatment, isOpen, submitted]);
 
+  // Never show a previous patient's success screen or details on reopening.
+  useEffect(() => {
+    if (isOpen) return;
+    setFullName('');
+    setPhone('');
+    setConcern(initialTreatment || '');
+    setPreferredDate('');
+    setAdditionalMessage('');
+    setErrors({});
+    setSubmitError(null);
+    setSubmitted(false);
+    setBookingRef('');
+    setCopied(false);
+  }, [isOpen, initialTreatment]);
+
   useEffect(() => {
     if (!isOpen) return;
     const previousOverflow = document.body.style.overflow;
