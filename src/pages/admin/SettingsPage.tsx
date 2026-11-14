@@ -65,6 +65,10 @@ export const SettingsPage: React.FC = () => {
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loadError) {
+      setNotification({ type: 'error', message: 'Settings could not be loaded. Retry before saving to avoid overwriting your existing information.' });
+      return;
+    }
     setSavingSettings(true);
     setNotification(null);
     try {
@@ -197,7 +201,7 @@ export const SettingsPage: React.FC = () => {
           </div>
           <button
             type="submit"
-            disabled={savingSettings}
+            disabled={savingSettings || Boolean(loadError)}
             className="px-6 py-2.5 bg-[#C9A47F] hover:bg-[#DFCAAF] text-[#0B0B0B] text-xs font-semibold uppercase tracking-[0.14em] transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
           >
             <Save className="w-3.5 h-3.5" />
@@ -411,7 +415,7 @@ export const SettingsPage: React.FC = () => {
 
           {/* Additional registered admins */}
           {admins
-            .filter((a) => a.email.toLowerCase() !== OWNER_EMAIL.toLowerCase())
+            .filter((a) => typeof a.email === 'string' && a.email.toLowerCase() !== OWNER_EMAIL.toLowerCase())
             .map((admin) => (
               <div
                 key={admin.uid}
