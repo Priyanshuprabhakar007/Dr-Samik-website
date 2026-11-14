@@ -53,25 +53,33 @@ async function getClinicAdmin() {
 
 
 
-/** Server-side readiness: verifies configured secrets and a Firestore read. */
+/**
+ * Public readiness probe: no patient data, credentials, database IDs, or
+ * stack traces are returned. Its status codes identify which setup stage
+ * requires attention without pretending that appointment saves work.
+ */
 export default {
   async fetch(request: Request) {
+    const headers = { 'Cache-Control': 'no-store' };
     if (request.method !== 'GET') {
-      return Response.json({ error: 'Method not allowed' }, { status: 405 });
+      return Response.json({ error: 'Method not allowed' }, { status: 405, headers });
+    }
+    const service = 'Dr. Samik Sharma website API';
+    if (!process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+      return Response.json({ service, status: 'configuration-required', reason: 'firebase-credentials-missing' }, { status: 503, headers });
+    }
+    if (!process.env.ENQUIRY_RATE_LIMIT_SECRET ||
+        process.env.ENQUIRY_RATE_LIMIT_SECRET.length < 32) {
+      return Response.json({ service, status: 'configuration-required', reason: 'rate-limit-secret-missing' }, { status: 503, headers });
     }
     try {
-      if (!process.env.ENQUIRY_RATE_LIMIT_SECRET ||
-          process.env.ENQUIRY_RATE_LIMIT_SECRET.length < 32) {
-        throw new Error('Enquiry rate limiting is not configured.');
-      }
       const { db } = await getClinicAdmin();
       await db.collection('settings').doc('current').get();
-      return Response.json({ service: 'Dr. Samik Sharma website API', status: 'ready' }, {
-        headers: { 'Cache-Control': 'no-store' },
-      });
-    } catch {
-      return Response.json({ service: 'Dr. Samik Sharma website API', status: 'configuration-required' }, {
-        status: 503, headers: { 'Cache-Control': 'no-store' },
+      return Response.json({ service, status: 'ready' }, { headers });
+    } catch (error) {
+      console.error('Clinic API health check failed:', error instanceof Error ? error.name : 'Unknown error');
+      return Response.json({ service, status: 'configuration-required', reason: 'firebase-connection-failed' }, {
+        status: 503, headers,
       });
     }
   },
