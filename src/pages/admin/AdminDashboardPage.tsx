@@ -71,6 +71,7 @@ export const AdminDashboardPage: React.FC = () => {
     void loadMetrics();
   }, []);
 
+  const metricsUnavailable = loading || Boolean(loadError);
   const totalEnquiries = enquiries.length;
   const pendingEnquiries = enquiries.filter((e) => e.status === 'new').length;
   const scheduledCount = enquiries.filter((e) => e.status === 'scheduled').length;
@@ -120,7 +121,7 @@ export const AdminDashboardPage: React.FC = () => {
             to="/admin/appointments"
             className="px-4 py-2 bg-[#C9A47F] text-[#0B0B0B] text-xs font-semibold uppercase tracking-wider hover:bg-[#DFCAAF] transition-colors"
           >
-            Review Enquiries ({pendingEnquiries})
+            Review Enquiries ({metricsUnavailable ? '—' : pendingEnquiries})
           </Link>
           <Link
             to="/"
@@ -151,12 +152,12 @@ export const AdminDashboardPage: React.FC = () => {
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-serif text-[#F6F0E9] font-light">
-              {loading ? '-' : pendingEnquiries}
+              {metricsUnavailable ? '—' : pendingEnquiries}
             </span>
             <span className="text-[11px] text-amber-400 font-medium">Awaiting Contact</span>
           </div>
           <p className="text-[11px] text-[#7C766F] mt-2">
-            Recent enquiries loaded: {totalEnquiries} (maximum 100)
+            Recent enquiries loaded: {metricsUnavailable ? 'unavailable' : totalEnquiries} (maximum 100)
           </p>
           <div className="absolute top-0 right-0 w-12 h-12 bg-[#C9A47F]/5 rounded-bl-full pointer-events-none" />
         </div>
@@ -169,12 +170,12 @@ export const AdminDashboardPage: React.FC = () => {
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-serif text-[#F6F0E9] font-light">
-              {loading ? '-' : scheduledCount}
+              {metricsUnavailable ? '—' : scheduledCount}
             </span>
             <span className="text-[11px] text-emerald-400 font-medium">Staff-marked scheduled</span>
           </div>
           <p className="text-[11px] text-[#7C766F] mt-2">
-            In discussion: {contactedCount}
+            In discussion: {metricsUnavailable ? '—' : contactedCount}
           </p>
         </div>
 
@@ -186,7 +187,7 @@ export const AdminDashboardPage: React.FC = () => {
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-serif text-[#F6F0E9] font-light">
-              {loading ? '-' : treatmentsCount}
+              {metricsUnavailable ? '—' : treatmentsCount}
             </span>
             <span className="text-[11px] text-[#C9A47F] font-medium">Procedures</span>
           </div>
@@ -203,7 +204,7 @@ export const AdminDashboardPage: React.FC = () => {
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-serif text-[#F6F0E9] font-light">
-              {loading ? '-' : blogCount}
+              {metricsUnavailable ? '—' : blogCount}
             </span>
             <span className="text-[11px] text-[#C9A47F] font-medium">Published Guides</span>
           </div>
@@ -238,7 +239,7 @@ export const AdminDashboardPage: React.FC = () => {
                 <card.icon className="w-4 h-4"/>
                 {card.label}
               </div>
-              <p className="font-serif text-3xl text-[#F6F0E9] mt-2">{loading ? '—' : card.value}</p>
+              <p className="font-serif text-3xl text-[#F6F0E9] mt-2">{metricsUnavailable ? '—' : card.value}</p>
             </div>
           ))}
         </div>
@@ -246,8 +247,8 @@ export const AdminDashboardPage: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
           <div className="lg:col-span-3 space-y-2">
             <div className="text-xs text-[#C9A47F] uppercase tracking-wider font-semibold mb-3">Needs staff attention</div>
-            {!loading && dueEnquiries.length === 0 && <p className="text-xs text-[#AFA89F] p-4 border border-white/5">No overdue follow-ups in the loaded enquiry records.</p>}
-            {dueEnquiries.slice(0, 5).map(e => (
+            {!metricsUnavailable && dueEnquiries.length === 0 && <p className="text-xs text-[#AFA89F] p-4 border border-white/5">No overdue follow-ups in the loaded enquiry records.</p>}
+            {!metricsUnavailable && dueEnquiries.slice(0, 5).map(e => (
               <div key={e.id || e.referenceCode} className="flex flex-wrap items-center justify-between gap-3 border border-white/10 bg-[#151312] p-3">
                 <div className="min-w-0">
                   <p className="text-xs font-medium text-[#F6F0E9]">{e.fullName}</p>
@@ -270,7 +271,7 @@ export const AdminDashboardPage: React.FC = () => {
             ].map(item => (
               <div key={item.name} className="mb-3">
                 <div className="flex items-center justify-between text-xs text-[#F6F0E9] mb-1">
-                  <span>{item.name}</span><span>{loading ? '—' : item.count}</span>
+                  <span>{item.name}</span><span>{metricsUnavailable ? '—' : item.count}</span>
                 </div>
                 <div className="h-1.5 bg-[#2D2824] overflow-hidden">
                   <div className={`h-full ${item.color}`} style={{ width: `${totalEnquiries ? item.count / totalEnquiries * 100 : 0}%` }} />
@@ -355,7 +356,7 @@ export const AdminDashboardPage: React.FC = () => {
             <CalendarCheck className="w-5 h-5 text-[#C9A47F] mb-3" />
             <div>
               <p className="text-xs font-medium text-[#F6F0E9] group-hover:text-[#C9A47F]">Inquiries Desk</p>
-              <p className="text-[10px] text-[#AFA89F] mt-0.5">{pendingEnquiries} pending review</p>
+              <p className="text-[10px] text-[#AFA89F] mt-0.5">{metricsUnavailable ? 'Count unavailable' : `${pendingEnquiries} pending review`}</p>
             </div>
             <div className="mt-3 flex items-center justify-between text-[10px] text-[#C9A47F]">
               <span>Open Desk</span>
@@ -385,6 +386,10 @@ export const AdminDashboardPage: React.FC = () => {
 
           {loading ? (
             <div className="py-12 text-center text-xs text-[#AFA89F]">Loading patient inquiries...</div>
+          ) : loadError ? (
+            <div role="status" className="py-12 text-center text-xs text-amber-300">
+              Enquiry records are unavailable. Check Firestore permissions and use Retry above.
+            </div>
           ) : enquiries.length === 0 ? (
             <div className="py-12 text-center space-y-2">
               <CheckCircle2 className="w-8 h-8 text-[#C9A47F] mx-auto opacity-40" />
