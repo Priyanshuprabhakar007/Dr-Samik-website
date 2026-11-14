@@ -89,6 +89,13 @@ export const AdminLayout: React.FC = () => {
   }, [user, isAdmin, location.pathname]);
 
   const handleManualSeed = async () => {
+    if (!isOwner) {
+      setSeedError('Only the verified practice owner can initialize starter content.');
+      return;
+    }
+    if (!window.confirm(
+      'This may publish starter website text, treatments and sample articles wherever the database is empty. Review all medical details and obtain the doctor’s approval before using it on a live website. Continue?'
+    )) return;
     setIsSeeding(true);
     setSeedError(null);
     try {
@@ -292,12 +299,13 @@ export const AdminLayout: React.FC = () => {
 
         {/* Sidebar Footer */}
         <div className="p-4 border-t border-[#C9A47F]/20 bg-[#12100F] space-y-3">
-          {/* Quick sync button */}
+          {/* Starter content initialization is sensitive and restricted to the owner. */}
+          {isOwner && (
           <button
             onClick={handleManualSeed}
             disabled={isSeeding}
             className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-[#24211E] hover:bg-[#2F2A27] border border-[#C9A47F]/30 text-[11px] text-[#AFA89F] hover:text-[#C9A47F] transition-colors cursor-pointer"
-            title="Ensure default treatments and pages are published in database"
+            title="Initialize missing starter content only after medical review"
           >
             {seedSuccess ? (
               <>
@@ -307,10 +315,11 @@ export const AdminLayout: React.FC = () => {
             ) : (
               <>
                 <RefreshCw className={`w-3.5 h-3.5 ${isSeeding ? 'animate-spin' : ''}`} />
-                <span>{isSeeding ? 'Syncing Schema...' : 'Sync Clinical Defaults'}</span>
+                <span>{isSeeding ? 'Syncing Schema...' : 'Initialize Starter Content'}</span>
               </>
             )}
           </button>
+          )}
 
           {seedError && (
             <p role="alert" className="border border-rose-500/40 bg-rose-950/20 p-2.5 text-[11px] leading-relaxed text-rose-200">
