@@ -20,11 +20,11 @@ service cloud.firestore {
       return isEmailVerified() && request.auth.token.email == "dilseinvite@gmail.com";
     }
 
-    // Verifies admin via custom claims, owner email, or explicit database document
+    // Verified owner or a currently approved Firebase UID.
+    // Never rely solely on cached custom claims: they may outlive a revocation.
     function isAdmin() {
       return isSignedIn() && isEmailVerified() && (
         isOwnerEmail() ||
-        request.auth.token.admin == true ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       );
     }
