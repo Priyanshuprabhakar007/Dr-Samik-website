@@ -60,55 +60,87 @@ function getBearerToken(request: Request): string | null {
 
 export default {
   async fetch(request: Request) {
-    if (request.method !== 'POST') {
-      return Response.json({ error: 'Method not allowed' }, { status: 405 });
-    }
+    const headers = { 'Cache-Control': 'no-store' };
+    const respond = (data: object, status = 200) => Response.json(data, { status, headers });
+
+    if (request.method !== 'POST') return respond({ error: 'Method not allowed.' }, 405);
     const token = getBearerToken(request);
-    if (!token) return Response.json({ error: 'Unauthorized.' }, { status: 401 });
+    if (!token) return respond({ error: 'Sign in with the practice owner account.' }, 401);
 
     try {
       const { db, auth } = await getClinicAdmin();
       const caller = await auth.verifyIdToken(token, true);
-      const callerEmail = (caller.email || '').toLowerCase();
+      const callerEmail = (caller.email || '').trim().toLowerCase();
       if (caller.email_verified !== true || callerEmail !== OWNER_EMAIL) {
-        return Response.json({ error: 'Only the verified practice owner may assign administrators.' }, { status: 403 });
-      }
-      let data: unknown;
-      try { data = await request.json(); }
-      catch { return Response.json({ error: 'Invalid request body.' }, { status: 400 }); }
-      if (!data || typeof data !== 'object' || Array.isArray(data)) {
-        return Response.json({ error: 'Invalid request body.' }, { status: 400 });
-      }
-      const { targetUid, targetEmail, role } = data as Record<string, unknown>;
-      if (
-        typeof targetUid !== 'string' || !targetUid || targetUid.length > 128 ||
-        typeof targetEmail !== 'string' || !targetEmail || targetEmail.length > 100 ||
-        (role !== 'admin' && role !== 'owner')
-      ) {
-        return Response.json({ error: 'Invalid target UID, email or role.' }, { status: 400 });
+        return respond({ error: 'Only the verified practice owner can manage administrator access.' }, 403);
       }
 
-      const target = await auth.getUser(targetUid);
-      if (!target.email || target.email.toLowerCase() !== targetEmail.trim().toLowerCase()) {
-        return Response.json({ error: 'Target UID and email do not match.' }, { status: 400 });
+      let payload: unknown;
+      try { payload = await request.json(); }
+      catch { return respond({ error: 'Invalid form data.' }, 400); }
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+        return respond({ error: 'Invalid form data.' }, 400);
       }
+      const { action, targetEmail } = payload as Record<string, unknown>;
+      const email = typeof targetEmail === 'string' ? targetEmail.trim().toLowerCase() : '';
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 100) {
+        return respond({ error: 'Enter a valid administrator email address.' }, 400);
+      }
+      if (action !== 'grant' && action !== 'revoke') {
+        return respond({ error: 'Invalid administrator access action.' }, 400);
+      }
+      if (email === OWNER_EMAIL) return respond({ error: 'The practice owner cannot be edited here.' }, 400);
 
-      await auth.setCustomUserClaims(targetUid, { ...target.customClaims, admin: true, role });
-      await db.collection('admins').doc(targetUid).set({
-        uid: targetUid, email: target.email.toLowerCase(), role,
-        grantedBy: callerEmail, updatedAt: new Date().toISOString(),
-      }, { merge: true });
+      let target;
+      try {
+        // Firebase Auth UIDs are authoritative. Do not generate IDs from email strings.
+        target = await auth.getUserByEmail(email);
+      } catch (error) {
+        if ((error as { code?: string })?.code === 'auth/user-not-found') {
+          return respond({ error: 'This Google account has not signed in to the website yet. Ask the user to sign in once, then retry.' }, 404);
+        }
+        throw error;
+      }
+      if (!target.emailVerified) {
+        return respond({ error: 'This account must verify its email before receiving admin access.' }, 400);
+      }
+      const targetUid = target.uid;
+      if (action === 'grant') {
+        await auth.setCustomUserClaims(targetUid, { ...target.customClaims, admin: true, role: 'admin' });
+        await db.collection('admins').doc(targetUid).set({
+          uid: targetUid,
+          email,
+          displayName: target.displayName || 'Clinical Administrator',
+          role: 'admin',
+          updatedAt: new Date().toISOString(),
+          grantedBy: callerEmail,
+        }, { merge: true });
+      } else {
+        const claims = { ...(target.customClaims || {}) };
+        delete claims.admin;
+        delete claims.role;
+        await auth.setCustomUserClaims(targetUid, claims);
+        await db.collection('admins').doc(targetUid).delete();
+        // Invalidate existing ID tokens so a revoked staff member loses access promptly.
+        await auth.revokeRefreshTokens(targetUid);
+      }
       await db.collection('audit_logs').add({
-        action: 'ASSIGN_ADMIN_ROLE', resource: 'admins', resourceId: targetUid,
-        performedBy: callerEmail, details: `Assigned role ${role} to administrator`,
+        action: action === 'grant' ? 'ASSIGN_ADMIN_ROLE' : 'REVOKE_ADMIN_ROLE',
+        resource: 'admins',
+        resourceId: targetUid,
+        performedBy: callerEmail,
+        details: action === 'grant' ? 'Administrator authorized' : 'Administrator access revoked',
         timestamp: new Date().toISOString(),
       });
-      return Response.json({ success: true, message: 'Admin permissions updated.' }, {
-        headers: { 'Cache-Control': 'no-store' },
+      return respond({
+        success: true,
+        action,
+        uid: targetUid,
+        message: action === 'grant' ? 'Administrator access granted.' : 'Administrator access revoked.',
       });
-    } catch (err) {
-      console.error('Role assignment API error:', err instanceof Error ? err.message : 'Unknown error');
-      return Response.json({ error: 'Unable to update administrator permissions.' }, { status: 503 });
+    } catch (error) {
+      console.error('Admin access API failed:', error instanceof Error ? error.name : 'Unknown error');
+      return respond({ error: 'Unable to update administrator access. Check Vercel runtime logs and Firebase configuration.' }, 503);
     }
   },
 };
