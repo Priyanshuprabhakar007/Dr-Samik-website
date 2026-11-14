@@ -105,9 +105,10 @@ export default {
         return respond({ error: 'This account must verify its email before receiving admin access.' }, 400);
       }
       const targetUid = target.uid;
+      const adminDoc = db.collection('admins').doc(targetUid);
       if (action === 'grant') {
-        await auth.setCustomUserClaims(targetUid, { ...target.customClaims, admin: true, role: 'admin' });
-        await db.collection('admins').doc(targetUid).set({
+        // The actual UID record is the source of truth for staff access.
+        await adminDoc.set({
           uid: targetUid,
           email,
           displayName: target.displayName || 'Clinical Administrator',
@@ -115,13 +116,20 @@ export default {
           updatedAt: new Date().toISOString(),
           grantedBy: callerEmail,
         }, { merge: true });
+        try {
+          await auth.setCustomUserClaims(targetUid, { ...target.customClaims, admin: true, role: 'admin' });
+        } catch (claimError) {
+          // Don't leave an approved UID record after the corresponding claim update fails.
+          await adminDoc.delete();
+          throw claimError;
+        }
       } else {
+        // Revoke the authoritative document before touching potentially cached claims.
+        await adminDoc.delete();
         const claims = { ...(target.customClaims || {}) };
         delete claims.admin;
         delete claims.role;
         await auth.setCustomUserClaims(targetUid, claims);
-        await db.collection('admins').doc(targetUid).delete();
-        // Invalidate existing ID tokens so a revoked staff member loses access promptly.
         await auth.revokeRefreshTokens(targetUid);
       }
       await db.collection('audit_logs').add({
