@@ -31,6 +31,16 @@ describe('clinic admin access regression guards', () => {
     expect(rules).not.toContain('request.auth.token.admin == true');
   });
 
+  test('starter content initialization cannot fake success on Firestore failure', () => {
+    const service = source('src/lib/firestoreService.ts');
+    const init = service.slice(service.indexOf('export async function seedInitialDataIfEmpty'));
+    expect(init).toContain("console.error('Initial data seeding failed:'");
+    expect(init).toContain('throw err');
+    const admin = source('src/components/admin/AdminLayout.tsx');
+    expect(admin).toContain('if (!isOwner)');
+    expect(admin).toContain('Initialize Starter Content');
+  });
+
   test('unavailable admin metrics are never displayed as empty clinics', () => {
     const panel = source('src/pages/admin/AdminDashboardPage.tsx');
     expect(panel).toContain('const metricsUnavailable = loading || Boolean(loadError)');
