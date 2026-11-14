@@ -988,6 +988,7 @@ export async function seedInitialDataIfEmpty(userEmail?: string) {
       }
     }
   } catch (err) {
-    console.warn('Initial data seeding note (rules or connection pending):', err);
+    console.error('Initial data seeding failed:', err);
+    throw err;
   }
 }
