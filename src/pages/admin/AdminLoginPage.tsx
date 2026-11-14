@@ -9,11 +9,15 @@ import { ShieldCheck, Lock, ArrowRight, AlertCircle, ArrowLeft } from 'lucide-re
 import { useAuth, OWNER_EMAIL } from '../../context/AuthContext';
 
 export const AdminLoginPage: React.FC = () => {
-  const { user, isAdmin, isOwner, loading, authError, loginWithGoogle, clearAuthError } = useAuth();
+  const { user, isAdmin, isOwner, loading, authError, loginWithGoogle, refreshAccess, clearAuthError } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const from = (location.state as any)?.from || '/admin';
+  const requestedPath = (location.state as { from?: unknown } | null)?.from;
+  const from = typeof requestedPath === 'string' &&
+    /^\/admin(?:\/|$)/.test(requestedPath) && requestedPath !== '/admin/login'
+      ? requestedPath
+      : '/admin';
 
   useEffect(() => {
     if (!loading && user && isAdmin) {
@@ -89,7 +93,16 @@ export const AdminLoginPage: React.FC = () => {
               </p>
               <p className="text-[11px] text-[#AFA89F]">
                 Authorized practice owner: <strong className="text-[#C9A47F]">{OWNER_EMAIL}</strong>.
+                If you have just received staff access, refresh your verification.
               </p>
+              <button
+                type="button"
+                onClick={() => void refreshAccess()}
+                disabled={loading}
+                className="mt-2 min-h-11 border border-[#C9A47F]/50 px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-[#C9A47F] hover:bg-[#C9A47F]/10 disabled:opacity-50"
+              >
+                Retry Access Check
+              </button>
             </div>
           )}
 
