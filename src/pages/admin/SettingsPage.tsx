@@ -24,8 +24,6 @@ import {
   getSettings,
   updateSettings,
   getAdminUsers,
-  addAdminUser,
-  removeAdminUser,
   ClinicSettings,
   AdminUserRecord,
   DEFAULT_SETTINGS,
@@ -42,8 +40,9 @@ export const SettingsPage: React.FC = () => {
 
   // New admin form
   const [newAdminEmail, setNewAdminEmail] = useState('');
-  const [newAdminName, setNewAdminName] = useState('');
   const [addingAdmin, setAddingAdmin] = useState(false);
+  const [removingUid, setRemovingUid] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     loadAll();
@@ -51,12 +50,14 @@ export const SettingsPage: React.FC = () => {
 
   const loadAll = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [sett, adminList] = await Promise.all([getSettings(), getAdminUsers()]);
       setSettings(sett);
       setAdmins(adminList);
     } catch (err) {
       console.error('Failed to load settings:', err);
+      setLoadError('Unable to load all practice settings and administrator records. Verify Firestore access and retry.');
     } finally {
       setLoading(false);
     }
@@ -81,67 +82,64 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
+  const updateAdminAccess = async (action: 'grant' | 'revoke', targetEmail: string) => {
+    if (!isOwner || !user) {
+      throw new Error('Only the verified practice owner can change staff permissions.');
+    }
+    const token = await user.getIdToken(true);
+    const response = await fetch('/api/admin/set-role', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ action, targetEmail: targetEmail.trim().toLowerCase() }),
+    });
+    const payload = await response.json().catch(() => null) as
+      | { success?: boolean; error?: string }
+      | null;
+    if (!response.ok || payload?.success !== true) {
+      throw new Error(payload?.error || `Administrator service unavailable (HTTP ${response.status}). Check the Vercel API configuration.`);
+    }
+  };
+
   const handleAddAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newAdminEmail.trim()) return;
-
-    if (!isOwner) {
-      alert('Only the primary Practice Owner can authorize new administrative accounts.');
-      return;
-    }
+    if (addingAdmin || !newAdminEmail.trim()) return;
 
     setAddingAdmin(true);
+    setNotification(null);
     try {
-      // Use clean UID key based on sanitized email or generated ID
-      const uidKey = newAdminEmail.trim().toLowerCase().replace(/[^a-zA-Z0-9]/g, '_');
-      await addAdminUser(
-        {
-          uid: uidKey,
-          email: newAdminEmail.trim().toLowerCase(),
-          displayName: newAdminName.trim() || 'Clinical Admin',
-          role: 'admin',
-        },
-        user?.email || undefined
-      );
-
+      await updateAdminAccess('grant', newAdminEmail);
+      const updated = await getAdminUsers();
+      setAdmins(updated);
+      setNotification({ type: 'success', message: `Administrator approved for ${newAdminEmail.trim().toLowerCase()}.` });
       setNewAdminEmail('');
-      setNewAdminName('');
-      setNotification({
-        type: 'success',
-        message: `Administrator authorization granted to ${newAdminEmail}.`,
-      });
-      const list = await getAdminUsers();
-      setAdmins(list);
-    } catch (err: any) {
-      console.error('Failed to add admin:', err);
-      alert(err.message || 'Failed to authorize administrator.');
+    } catch (err) {
+      setNotification({ type: 'error', message: err instanceof Error ? err.message : 'Unable to grant access.' });
     } finally {
       setAddingAdmin(false);
-      setTimeout(() => setNotification(null), 5000);
     }
   };
 
   const handleRemoveAdmin = async (adminUid: string, adminEmail: string) => {
-    if (adminEmail.toLowerCase() === OWNER_EMAIL.toLowerCase()) {
-      alert('The root practice owner account cannot be deleted.');
-      return;
-    }
-
-    if (!isOwner) {
-      alert('Only the primary Practice Owner can revoke administrator privileges.');
-      return;
-    }
-
+    if (removingUid || !isOwner) return;
+    if (adminEmail.toLowerCase() === OWNER_EMAIL.toLowerCase()) return;
     if (!window.confirm(`Revoke administrative access for ${adminEmail}?`)) return;
 
+    setRemovingUid(adminUid);
+    setNotification(null);
     try {
-      await removeAdminUser(adminUid, user?.email || undefined);
-      setNotification({ type: 'success', message: `Revoked access for ${adminEmail}.` });
-      const list = await getAdminUsers();
-      setAdmins(list);
+      // Removing only a Firestore document can leave admin custom claims active.
+      // The protected API revokes both the claim and the access document.
+      await updateAdminAccess('revoke', adminEmail);
+      const updated = await getAdminUsers();
+      setAdmins(updated);
+      setNotification({ type: 'success', message: `Revoked administrator access for ${adminEmail}.` });
     } catch (err) {
-      console.error('Failed to remove admin:', err);
-      alert('Failed to revoke administrator.');
+      setNotification({ type: 'error', message: err instanceof Error ? err.message : 'Unable to revoke access.' });
+    } finally {
+      setRemovingUid(null);
     }
   };
 
@@ -165,6 +163,13 @@ export const SettingsPage: React.FC = () => {
           </p>
         </div>
       </div>
+
+      {loadError && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 border border-rose-500/30 bg-rose-950/30 p-4 text-xs text-rose-200">
+          <span>{loadError}</span>
+          <button type="button" onClick={() => void loadAll()} className="underline hover:text-white">Retry</button>
+        </div>
+      )}
 
       {notification && (
         <div
@@ -349,7 +354,7 @@ export const SettingsPage: React.FC = () => {
               Authorize New Administrative Account
             </span>
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-              <div className="sm:col-span-5">
+              <div className="sm:col-span-8">
                 <label className="block text-[10px] text-[#AFA89F] mb-1">Google Account Email *</label>
                 <input
                   type="email"
@@ -362,17 +367,6 @@ export const SettingsPage: React.FC = () => {
               </div>
 
               <div className="sm:col-span-4">
-                <label className="block text-[10px] text-[#AFA89F] mb-1">Full Name / Role Title</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Clinical Coordinator"
-                  value={newAdminName}
-                  onChange={(e) => setNewAdminName(e.target.value)}
-                  className="w-full bg-[#12100F] border border-white/10 p-2 text-xs text-[#F6F0E9]"
-                />
-              </div>
-
-              <div className="sm:col-span-3">
                 <button
                   type="submit"
                   disabled={addingAdmin}
@@ -383,6 +377,10 @@ export const SettingsPage: React.FC = () => {
                 </button>
               </div>
             </div>
+            <p className="text-[11px] leading-relaxed text-[#AFA89F]">
+              Staff must sign in once with their Google account before you can grant access.
+              Authorization uses their real Firebase account, not an email-derived ID.
+            </p>
           </form>
         ) : (
           <div className="p-3 bg-[#141211] border border-white/5 text-xs text-[#AFA89F]">
@@ -431,7 +429,8 @@ export const SettingsPage: React.FC = () => {
                   {isOwner && (
                     <button
                       onClick={() => handleRemoveAdmin(admin.uid, admin.email)}
-                      className="p-1 text-[#AFA89F] hover:text-rose-400 transition-colors cursor-pointer"
+                      disabled={removingUid !== null}
+                      className="p-2 text-[#AFA89F] hover:text-rose-400 transition-colors cursor-pointer disabled:opacity-50"
                       title="Revoke Admin Access"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
