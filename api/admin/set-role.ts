@@ -67,7 +67,7 @@ export default {
     if (!token) return Response.json({ error: 'Unauthorized.' }, { status: 401 });
 
     try {
-      const { db, auth } = getClinicAdmin();
+      const { db, auth } = await getClinicAdmin();
       const caller = await auth.verifyIdToken(token, true);
       const callerEmail = (caller.email || '').toLowerCase();
       if (caller.email_verified !== true || callerEmail !== OWNER_EMAIL) {
