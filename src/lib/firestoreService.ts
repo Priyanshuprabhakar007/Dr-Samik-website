@@ -910,7 +910,8 @@ export async function getAdminUsers(): Promise<AdminUserRecord[]> {
     return snapshot.docs.map((d) => d.data() as AdminUserRecord);
   } catch (err) {
     console.error('Failed to get admin users:', err);
-    return [];
+    // An inaccessible admin list must not be displayed as "no admins".
+    throw err;
   }
 }
 
