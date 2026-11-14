@@ -2,15 +2,9 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import {
-  User,
-  onAuthStateChanged,
-  signInWithPopup,
-  signOut,
-} from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { User, onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../lib/firebase';
 
 interface AuthContextType {
@@ -21,116 +15,92 @@ interface AuthContextType {
   authError: string | null;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
+  refreshAccess: () => Promise<void>;
   clearAuthError: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Primary Practice Owner Email
 export const OWNER_EMAIL = 'dilseinvite@gmail.com';
+
+type Privileges = { isAdmin: boolean; isOwner: boolean; error: string | null };
+
+/**
+ * Resolve administrative access against Firebase Authentication + Firestore.
+ * Deliberately independent of Vercel serverless functions: a broken booking API
+ * must not prevent the practice owner from signing into the CMS.
+ *
+ * For staff, /admins/{auth.uid} must exist with a valid role. The database
+ * record, not an email-derived key or a stale token claim, is authoritative.
+ */
+async function resolveAccess(currentUser: User): Promise<Privileges> {
+  if (!currentUser.emailVerified) {
+    return { isAdmin: false, isOwner: false, error: 'Please verify your Google account email before accessing the practice portal.' };
+  }
+  const email = (currentUser.email || '').trim().toLowerCase();
+  if (email === OWNER_EMAIL) {
+    return { isAdmin: true, isOwner: true, error: null };
+  }
+  try {
+    const snapshot = await getDoc(doc(db, 'admins', currentUser.uid));
+    const role = snapshot.exists() ? snapshot.data()?.role : undefined;
+    return { isAdmin: role === 'admin', isOwner: false, error: null };
+  } catch (err) {
+    console.warn('Unable to verify admin permissions in Firestore:', err);
+    return {
+      isAdmin: false,
+      isOwner: false,
+      error: 'Unable to verify staff access. Check the Firebase database connection and retry. No access has been granted.',
+    };
+  }
+}
+
+function signInMessage(error: unknown): string {
+  const code = (error as { code?: string } | null)?.code;
+  if (code === 'auth/unauthorized-domain') {
+    return 'This website domain is not authorized in Firebase Authentication. Add the Vercel production domain in Firebase Authentication → Authorized domains.';
+  }
+  if (code === 'auth/popup-blocked') return 'Your browser blocked the Google sign-in popup. Allow popups for this website and try again.';
+  if (code === 'auth/popup-closed-by-user') return 'Sign-in was cancelled. Select your practice Google account to continue.';
+  if (code === 'auth/network-request-failed') return 'Unable to reach Firebase Authentication. Check your network and retry.';
+  return 'Google sign-in did not complete. Please retry or check the Firebase Authentication setup.';
+}
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [isAdmin, setIsAdmin] = useState<boolean>(false);
-  const [isOwner, setIsOwner] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  const checkAdminPrivileges = async (currentUser: User) => {
-    try {
-      const isOwnerAccount = currentUser.emailVerified && currentUser.email?.toLowerCase() === OWNER_EMAIL.toLowerCase();
-
-      // 1. Check custom claims on token
-      const idTokenResult = await currentUser.getIdTokenResult();
-      const hasAdminClaim = idTokenResult.claims.admin === true;
-
-      // 2. Call server-side verification endpoint
-      try {
-        const idToken = await currentUser.getIdToken();
-        const verifyRes = await fetch('/api/auth/verify-admin', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${idToken}`,
-          },
-          body: JSON.stringify({ email: currentUser.email, uid: currentUser.uid }),
-        });
-
-        if (verifyRes.ok) {
-          const authData = await verifyRes.json();
-          if (authData.isAdmin) {
-            setIsAdmin(true);
-            setIsOwner(authData.isOwner);
-            return;
-          }
-        }
-      } catch (endpointErr) {
-        console.warn('Server admin endpoint notice (falling back to database record):', endpointErr);
-      }
-
-      // 3. Check /admins/{uid} in Firestore
-      const adminDocRef = doc(db, 'admins', currentUser.uid);
-      const adminSnap = await getDoc(adminDocRef);
-
-      if (isOwnerAccount) {
-        // Bootstrap owner record if not yet created
-        if (!adminSnap.exists()) {
-          try {
-            await setDoc(adminDocRef, {
-              uid: currentUser.uid,
-              email: currentUser.email,
-              displayName: currentUser.displayName || 'Practice Owner',
-              role: 'owner',
-              createdAt: new Date().toISOString(),
-            });
-          } catch (writeErr) {
-            console.warn('Owner bootstrap write notice:', writeErr);
-          }
-        }
-        setIsAdmin(true);
-        setIsOwner(true);
-        return;
-      }
-
-      if (hasAdminClaim) {
-        setIsAdmin(true);
-        setIsOwner(false);
-        return;
-      }
-
-      if (adminSnap.exists()) {
-        const data = adminSnap.data();
-        if (data.role === 'admin' || data.role === 'owner') {
-          setIsAdmin(true);
-          setIsOwner(data.role === 'owner');
-          return;
-        }
-      }
-
-      // Explicitly unauthorized for non-admin accounts
-      setIsAdmin(false);
-      setIsOwner(false);
-    } catch (err: any) {
-      console.error('Error verifying admin authorization:', err);
-      // Authorization errors must fail closed.
-      setIsAdmin(false);
-      setIsOwner(false);
-    }
+  const applyPrivileges = async (currentUser: User) => {
+    // Fail closed while checking a new account.
+    setIsAdmin(false);
+    setIsOwner(false);
+    const next = await resolveAccess(currentUser);
+    setIsAdmin(next.isAdmin);
+    setIsOwner(next.isOwner);
+    setAuthError(next.error);
   };
 
   useEffect(() => {
+    let active = true;
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (!active) return;
+      setLoading(true);
       setUser(currentUser);
       if (currentUser) {
-        await checkAdminPrivileges(currentUser);
+        await applyPrivileges(currentUser);
       } else {
         setIsAdmin(false);
         setIsOwner(false);
+        setAuthError(null);
       }
-      setLoading(false);
+      if (active) setLoading(false);
     });
-
-    return () => unsubscribe();
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, []);
 
   const loginWithGoogle = async () => {
@@ -138,12 +108,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAuthError(null);
     try {
       const result = await signInWithPopup(auth, googleProvider);
-      if (result.user) {
-        await checkAdminPrivileges(result.user);
-      }
-    } catch (err: any) {
-      console.error('Google Sign-In failed:', err);
-      setAuthError(err.message || 'Authentication failed. Please try again.');
+      setUser(result.user);
+      await applyPrivileges(result.user);
+    } catch (err) {
+      setAuthError(signInMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const refreshAccess = async () => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      setAuthError('Sign in with an authorized Google account first.');
+      return;
+    }
+    setLoading(true);
+    setAuthError(null);
+    try {
+      await currentUser.getIdToken(true);
+      await applyPrivileges(currentUser);
+    } catch (err) {
+      console.warn('Unable to refresh admin login:', err);
+      setIsAdmin(false);
+      setIsOwner(false);
+      setAuthError('Could not refresh your login. Check the connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -155,26 +144,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(null);
       setIsAdmin(false);
       setIsOwner(false);
-    } catch (err: any) {
-      console.error('Sign-out error:', err);
+      setAuthError(null);
+    } catch (err) {
+      console.warn('Unable to sign out:', err);
+      setAuthError('Sign-out was unsuccessful. Please try again.');
     }
   };
 
-  const clearAuthError = () => setAuthError(null);
-
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isAdmin,
-        isOwner,
-        loading,
-        authError,
-        loginWithGoogle,
-        logout,
-        clearAuthError,
-      }}
-    >
+    <AuthContext.Provider value={{
+      user, isAdmin, isOwner, loading, authError,
+      loginWithGoogle, logout, refreshAccess,
+      clearAuthError: () => setAuthError(null),
+    }}>
       {children}
     </AuthContext.Provider>
   );
@@ -182,8 +164,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 };
