@@ -76,10 +76,12 @@ export default {
       }
       const email = (decoded.email || '').toLowerCase();
       const isOwner = email === OWNER_EMAIL;
-      let isAdmin = isOwner || decoded.admin === true;
-      if (!isAdmin) {
+      let isAdmin = isOwner;
+      if (!isOwner) {
+        // Require the actual UID-bound admin record. A stale custom claim is
+        // not enough to restore access after the owner has revoked it.
         const record = await db.collection('admins').doc(decoded.uid).get();
-        isAdmin = record.exists && ['admin', 'owner'].includes(record.data()?.role);
+        isAdmin = record.exists && record.data()?.role === 'admin';
       }
       return Response.json({ isAdmin, isOwner, email, uid: decoded.uid }, {
         headers: { 'Cache-Control': 'no-store' },
