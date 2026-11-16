@@ -55,7 +55,8 @@ describe('Vercel serverless function imports', () => {
     }
     expect(source).not.toContain('private_key: credentials.private_key');
     expect(source).not.toContain('console.error(error)');
-    expect(source).toContain("console.error('Clinic API health check failed:', reason)");
+    expect(source).toContain("console.error('Clinic API health check failed:', { reason, stage })");
+    expect(source).toContain("stage = 'firestore-read'");
   });
 
   test('the serverless enquiry validator matches the development backend', () => {
