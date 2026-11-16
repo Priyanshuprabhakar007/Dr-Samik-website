@@ -42,12 +42,20 @@ describe('Vercel serverless function imports', () => {
     for (const key of [
       'firebase-credentials-missing',
       'rate-limit-secret-missing',
+      'firebase-service-account-json-invalid',
+      'firebase-service-account-project-mismatch',
+      'firebase-service-account-key-invalid',
+      'firestore-database-not-found',
+      'firestore-permission-denied',
+      'firebase-service-account-authentication-failed',
+      'firestore-network-unavailable',
       'firebase-connection-failed',
     ]) {
       expect(source).toContain(key);
     }
     expect(source).not.toContain('private_key: credentials.private_key');
     expect(source).not.toContain('console.error(error)');
+    expect(source).toContain("console.error('Clinic API health check failed:', reason)");
   });
 
   test('the serverless enquiry validator matches the development backend', () => {
