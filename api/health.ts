@@ -72,6 +72,11 @@ function connectionReason(error: unknown): string {
   const code = typeof rawCode === 'number' ? rawCode : String(rawCode ?? '').toLowerCase();
   const message = typeof info.message === 'string' ? info.message.toLowerCase() : '';
 
+  if (code === 'missing-dependencies' || code === 'module_not_found' ||
+      code === 'err_module_not_found' ||
+      /cannot find module.*(?:firestore|firebase-admin)|failed to import the cloud firestore client library|cloud firestore runtime sdk could not be loaded/.test(message)) {
+    return 'firestore-runtime-module-missing';
+  }
   if (message.includes('credentials do not match this website project')) {
     return 'firebase-service-account-project-mismatch';
   }
