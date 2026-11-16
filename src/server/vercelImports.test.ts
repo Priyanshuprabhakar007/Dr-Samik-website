@@ -24,11 +24,20 @@ describe('Vercel serverless function imports', () => {
       expect(localImports).toHaveLength(0);
       expect(source).toContain("import('firebase-admin/app')");
       expect(source).toContain("import('firebase-admin/firestore')");
+      expect(source).toContain("import('@google-cloud/firestore')");
       expect(source).toContain('async function getClinicAdmin()');
       expect(source).toContain('export default {');
       expect(source).toContain('getFirestore(app, FIRESTORE_DATABASE_ID)');
     });
   }
+
+  test('Cloud Firestore is installed as a required, locked runtime dependency', () => {
+    const pkg = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8'));
+    const lock = readFileSync(resolve(ROOT, 'bun.lock'), 'utf8');
+    expect(pkg.dependencies['@google-cloud/firestore']).toBe('^9.4.0');
+    expect(lock).toContain('"@google-cloud/firestore": "^9.4.0"');
+    expect(lock).toContain('"@google-cloud/firestore@9.4.0"');
+  });
 
   test('dependency-free /api/ping stays available even if Firebase fails', () => {
     const source = readFileSync(resolve(ROOT, 'api/ping.ts'), 'utf8');
@@ -47,6 +56,7 @@ describe('Vercel serverless function imports', () => {
       'firebase-service-account-key-invalid',
       'firestore-database-not-found',
       'firestore-permission-denied',
+      'firestore-runtime-module-missing',
       'firebase-service-account-authentication-failed',
       'firestore-network-unavailable',
       'firebase-connection-failed',
