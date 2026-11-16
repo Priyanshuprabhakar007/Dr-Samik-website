@@ -379,7 +379,7 @@ export const AdminLayout: React.FC = () => {
               title="Patient Inquiries"
             >
               <Bell className="w-4 h-4" />
-              {pendingEnquiriesCount > 0 && (
+              {pendingEnquiriesCount !== null && pendingEnquiriesCount > 0 && (
                 <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#C9A47F] animate-pulse" />
               )}
             </Link>
