@@ -54,6 +54,41 @@ async function getClinicAdmin() {
 
 
 /**
+ * Classify expected infrastructure errors without exposing underlying messages,
+ * service-account data, Firestore document contents, or token material.
+ */
+function connectionReason(error: unknown): string {
+  if (error instanceof SyntaxError) return 'firebase-service-account-json-invalid';
+  const info = (error && typeof error === 'object') ? error as { code?: unknown; message?: unknown } : {};
+  const rawCode = info.code;
+  const code = typeof rawCode === 'number' ? rawCode : String(rawCode ?? '').toLowerCase();
+  const message = typeof info.message === 'string' ? info.message.toLowerCase() : '';
+
+  if (message.includes('credentials do not match this website project')) {
+    return 'firebase-service-account-project-mismatch';
+  }
+  if (/invalid pem|invalid private key|private key|failed to parse.*key|error:1e08010c/i.test(message)) {
+    return 'firebase-service-account-key-invalid';
+  }
+  if (code === 5 || code === '5' || code === 'not_found' ||
+      /database.*not found|database.*does not exist|5 not_found/.test(message)) {
+    return 'firestore-database-not-found';
+  }
+  if (code === 7 || code === '7' || code === 'permission_denied' ||
+      /permission.denied|missing or insufficient permissions|7 permission_denied/.test(message)) {
+    return 'firestore-permission-denied';
+  }
+  if (code === 16 || code === '16' || code === 'unauthenticated' ||
+      /invalid_grant|invalid jwt|unauthenticated/.test(message)) {
+    return 'firebase-service-account-authentication-failed';
+  }
+  if (code === 14 || code === '14' || code === 'unavailable') {
+    return 'firestore-network-unavailable';
+  }
+  return 'firebase-connection-failed';
+}
+
+/**
  * Public readiness probe: no patient data, credentials, database IDs, or
  * stack traces are returned. Its status codes identify which setup stage
  * requires attention without pretending that appointment saves work.
@@ -77,8 +112,10 @@ export default {
       await db.collection('settings').doc('current').get();
       return Response.json({ service, status: 'ready' }, { headers });
     } catch (error) {
-      console.error('Clinic API health check failed:', error instanceof Error ? error.name : 'Unknown error');
-      return Response.json({ service, status: 'configuration-required', reason: 'firebase-connection-failed' }, {
+      const reason = connectionReason(error);
+      // No raw error messages here: authentication errors may include sensitive configuration.
+      console.error('Clinic API health check failed:', reason);
+      return Response.json({ service, status: 'configuration-required', reason }, {
         status: 503, headers,
       });
     }
