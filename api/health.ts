@@ -59,7 +59,8 @@ async function getClinicAdmin() {
  */
 function connectionReason(error: unknown): string {
   if (error instanceof SyntaxError) return 'firebase-service-account-json-invalid';
-  const info = (error && typeof error === 'object') ? error as { code?: unknown; message?: unknown } : {};
+  const info: { code?: unknown; message?: unknown } =
+    error && typeof error === 'object' ? error as { code?: unknown; message?: unknown } : {};
   const rawCode = info.code;
   const code = typeof rawCode === 'number' ? rawCode : String(rawCode ?? '').toLowerCase();
   const message = typeof info.message === 'string' ? info.message.toLowerCase() : '';
