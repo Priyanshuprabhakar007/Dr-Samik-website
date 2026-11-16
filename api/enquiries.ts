@@ -16,11 +16,18 @@ async function getClinicAdmin() {
     { cert, getApp, getApps, initializeApp },
     { getFirestore },
     { getAuth },
+    cloudFirestore,
   ] = await Promise.all([
     import('firebase-admin/app'),
     import('firebase-admin/firestore'),
     import('firebase-admin/auth'),
+    // Firebase Admin loads this from a separate runtime package.
+    // Importing it explicitly ensures Vercel includes it in the function bundle.
+    import('@google-cloud/firestore'),
   ]);
+  if (!('Firestore' in cloudFirestore) && !('default' in cloudFirestore)) {
+    throw new Error('Cloud Firestore runtime SDK could not be loaded.');
+  }
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (!raw) throw new Error('Firebase Admin credentials are not configured.');
   const credentials = JSON.parse(raw) as {
