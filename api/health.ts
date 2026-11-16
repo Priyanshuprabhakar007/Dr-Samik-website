@@ -108,15 +108,17 @@ export default {
         process.env.ENQUIRY_RATE_LIMIT_SECRET.length < 32) {
       return Response.json({ service, status: 'configuration-required', reason: 'rate-limit-secret-missing' }, { status: 503, headers });
     }
+    let stage: 'firebase-initialization' | 'firestore-read' = 'firebase-initialization';
     try {
       const { db } = await getClinicAdmin();
+      stage = 'firestore-read';
       await db.collection('settings').doc('current').get();
       return Response.json({ service, status: 'ready' }, { headers });
     } catch (error) {
       const reason = connectionReason(error);
-      // No raw error messages here: authentication errors may include sensitive configuration.
-      console.error('Clinic API health check failed:', reason);
-      return Response.json({ service, status: 'configuration-required', reason }, {
+      // Do not expose raw error messages: credentials and tokens may be sensitive.
+      console.error('Clinic API health check failed:', { reason, stage });
+      return Response.json({ service, status: 'configuration-required', reason, stage }, {
         status: 503, headers,
       });
     }
